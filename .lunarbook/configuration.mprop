@@ -1,8 +1,0 @@
-theme: {
-    environment:
-        omnibar: {
-            {text: "Guide", link: "/guide"}
-            {text: "Configuration Reference", link: "/config"}
-            {text: "Theming", link: "/themes"}
-        }
-}
