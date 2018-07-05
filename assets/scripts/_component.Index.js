@@ -10,7 +10,7 @@
                 if (location.pathname !== message.pathname) {
                     // Nope, update the iframe with the new fragment
                     STRING_LAST_PATH = message.pathname;
-                    ELEMENT_IFRAME_FRAGMENT.setAttribute("src", "/assets/fragments" + message.pathname);
+                    ELEMENT_IFRAME_FRAGMENT.setAttribute("src", "/lunarbook/assets/fragments" + message.pathname);
     
                 } else {
                     // Yep, update the iframe with the new fragment section
