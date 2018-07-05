@@ -1,0 +1,12 @@
+name:		"lunarbook"
+author:		"novacbn"
+repository:	"github://novacbn/lunarbook"
+version:	"0.0.0"
+
+buildDirectory: "build"
+
+projectBuilds: 
+	"novacbn/lunarbook/main": "lunarbook"
+
+Packager:
+	targetPlatform: "lua"
