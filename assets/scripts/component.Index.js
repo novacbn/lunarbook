@@ -5,7 +5,7 @@
     let WINDOW_MESSAGES = {
         onFragmentChange (event, message) {
             // Check if the message source is from navigation or not
-            if (event.source.location.pathname.endsWith("-navigation")) {
+            if (event.source.location.pathname.endsWith("spec.navigation")) {
                 // The origin of the message is from navigation, check if the fragment path matches
                 if (location.pathname !== message.pathname) {
                     // Nope, update the iframe with the new fragment
