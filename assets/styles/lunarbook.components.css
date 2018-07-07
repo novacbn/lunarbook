@@ -1,0 +1,85 @@
+*[data-root][data-layout='3f19d616ab1973eab54443edad1f469f67e51a95'] {
+	animation-duration: 0.5s, 0.2s;
+	animation-name: fadeIn, slideInLeft;
+	background-color: #f7f7f7;
+	color: #111111;
+	font-size: 1.7rem;
+	overflow-y: auto;
+	padding-left: 7.41rem;
+	padding-right: 20.17rem;
+	padding-top: 2.72rem;
+	z-index: 1;
+}
+*[data-root][data-layout='3f19d616ab1973eab54443edad1f469f67e51a95'] a {
+	color: #0056af;
+	outline: none;
+	position: relative;
+	text-decoration: none;
+}
+*[data-root][data-layout='3f19d616ab1973eab54443edad1f469f67e51a95'] a:hover {
+	border-bottom: 2px solid #0056af;
+	border-radius: 2px;
+	color: #001F3F;
+}
+*[data-root][data-layout='3f19d616ab1973eab54443edad1f469f67e51a95'] code {
+	background-color: #00172f;
+	border: 1px solid #8fc6ff;
+	color: #FFFFFF;
+	position: relative;
+}
+*[data-root][data-layout='3f19d616ab1973eab54443edad1f469f67e51a95'] h4 {
+	border-bottom: 2px solid #8fc6ff;
+	margin-bottom: 2.72rem;
+	padding-bottom: 1rem;
+}
+
+div[data-layout='c2df9b932637fe9d32a0f16da1c11873398f873d'].container {
+	overflow: hidden;
+}
+
+*[data-root][data-layout='cf03cf2e9cdf95a20af09137dfb9071db0c31bf2'] {
+	z-index: 2;
+}
+div[data-layout='cf03cf2e9cdf95a20af09137dfb9071db0c31bf2'] {
+	background-color: #FFFFFF;
+	max-width: 20rem;
+	padding-left: 2.72rem;
+	padding-top: 2.72rem;
+}
+h6[data-layout='cf03cf2e9cdf95a20af09137dfb9071db0c31bf2'] {
+	color: #111111;
+	font-weight: bold;
+	margin-bottom: 0.66rem;
+}
+ul[data-layout='cf03cf2e9cdf95a20af09137dfb9071db0c31bf2'] {
+	list-style-type: none;
+	padding: 0;
+}
+li[data-layout='cf03cf2e9cdf95a20af09137dfb9071db0c31bf2'] {
+	margin-bottom: 0;
+}
+a[data-layout='cf03cf2e9cdf95a20af09137dfb9071db0c31bf2'] {
+	color: #0056af !important;
+	outline: none;
+	text-decoration: none;
+}
+
+*[data-root][data-layout='56def3b765521cb554f1ff7585609e7cd5a08417'] {
+	background-color: #001F3F;
+	max-height: 5rem;
+	overflow: hidden;
+	padding-left: 2.72rem;
+	padding-right: 2.72rem;
+}
+*[data-root][data-layout='56def3b765521cb554f1ff7585609e7cd5a08417'] a {
+	color: #DDDDDD;
+	font-size: 2rem;
+	outline: none;
+	text-decoration: none;
+}
+*[data-root][data-layout='56def3b765521cb554f1ff7585609e7cd5a08417'] a:hover {
+	color: #0056af;
+}
+*[data-root][data-layout='56def3b765521cb554f1ff7585609e7cd5a08417'] a.header {
+	font-size: 2.5rem !important;
+}
