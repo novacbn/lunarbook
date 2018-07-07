@@ -1,4 +1,4 @@
-import lower, gsub, sub from string
+import gsub, lower, sub from string
 
 -- ::dashcase(string value) -> string
 -- Formats 'camelCaseString' to 'dash-case-string'
@@ -14,7 +14,7 @@ export endswith = (value, postfix) ->
 
 -- ::gsubwhile(string value, string pattern, string or function replacement) -> string
 -- Performs replacements until no more are available
--- expor
+-- export
 export gsubwhile = (value, pattern, replacement) ->
     replacements = 1
     while replacements > 0

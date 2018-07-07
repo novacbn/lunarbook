@@ -1935,503 +1935,6 @@ do\
   _with_0.VERSION = \"2.0.0\"\
   return _with_0\
 end",
-['luapower/color/exports'] = "--color parsing, formatting and computation.\
---Written by Cosmin Apreutesei. Public Domain.\
---HSL-RGB conversions from Sputnik by Yuri Takhteyev (MIT/X License).\
-\
-local function clamp01(x)\
-\9return math.min(math.max(x, 0), 1)\
-end\
-\
-local function round(x)\
-\9return math.floor(x + 0.5)\
-end\
-\
---clamping -------------------------------------------------------------------\
-\
-local clamps = {} --{space -> func(x, y, z, a)}\
-\
-local function clamp_hsx(h, s, x, a)\
-\9return h % 360, clamp01(s), clamp01(x)\
-end\
-clamps.hsl = clamp_hsx\
-clamps.hsv = clamp_hsx\
-\
-function clamps.rgb(r, g, b)\
-\9return clamp01(r), clamp01(g), clamp01(b)\
-end\
-\
-local function clamp(space, x, y, z, a)\
-\9x, y, z = clamps[space](x, y, z)\
-\9if a then return x, y, z, clamp01(a) end\
-\9return x, y, z\
-end\
-\
---conversion -----------------------------------------------------------------\
-\
---HSL <-> RGB\
-\
---hsl is in (0..360, 0..1, 0..1); rgb is (0..1, 0..1, 0..1)\
-local function h2rgb(m1, m2, h)\
-\9if h<0 then h = h+1 end\
-\9if h>1 then h = h-1 end\
-\9if h*6<1 then\
-\9\9return m1+(m2-m1)*h*6\
-\9elseif h*2<1 then\
-\9\9return m2\
-\9elseif h*3<2 then\
-\9\9return m1+(m2-m1)*(2/3-h)*6\
-\9else\
-\9\9return m1\
-\9end\
-end\
-local function hsl_to_rgb(h, s, L)\
-\9h = h / 360\
-\9local m2 = L <= .5 and L*(s+1) or L+s-L*s\
-\9local m1 = L*2-m2\
-\9return\
-\9\9h2rgb(m1, m2, h+1/3),\
-\9\9h2rgb(m1, m2, h),\
-\9\9h2rgb(m1, m2, h-1/3)\
-end\
-\
---rgb is in (0..1, 0..1, 0..1); hsl is (0..360, 0..1, 0..1)\
-local function rgb_to_hsl(r, g, b)\
-\9local min = math.min(r, g, b)\
-\9local max = math.max(r, g, b)\
-\9local delta = max - min\
-\
-\9local h, s, l = 0, 0, (min + max) / 2\
-\
-\9if l > 0 and l < 0.5 then s = delta / (max + min) end\
-\9if l >= 0.5 and l < 1 then s = delta / (2 - max - min) end\
-\
-\9if delta > 0 then\
-\9\9if max == r and max ~= g then h = h + (g-b) / delta end\
-\9\9if max == g and max ~= b then h = h + 2 + (b-r) / delta end\
-\9\9if max == b and max ~= r then h = h + 4 + (r-g) / delta end\
-\9\9h = h / 6\
-\9end\
-\
-\9if h < 0 then h = h + 1 end\
-\9if h > 1 then h = h - 1 end\
-\
-\9return h * 360, s, l\
-end\
-\
---HSV <-> RGB\
-\
-local function rgb_to_hsv(r, g, b)\
-\9local K = 0\
-\9if g < b then\
-\9\9g, b = b, g\
-\9\9K = -1\
-\9end\
-\9if r < g then\
-\9\9r, g = g, r\
-\9\9K = -2 / 6 - K\
-\9end\
-\9local chroma = r - math.min(g, b)\
-\9local h = math.abs(K + (g - b) / (6 * chroma + 1e-20))\
-\9local s = chroma / (r + 1e-20)\
-\9local v = r\
-\9return h * 360, s, v\
-end\
-\
-local function hsv_to_rgb(h, s, v)\
-\9if s == 0 then --gray\
-\9\9return v, v, v\
-\9end\
-\9local H = h / 60\
-\9local i = math.floor(H) --which 1/6 part of hue circle\
-\9local f = H - i\
-\9local p = v * (1 - s)\
-\9local q = v * (1 - s * f)\
-\9local t = v * (1 - s * (1 - f))\
-\9if i == 0 then\
-\9\9return v, t, p\
-\9elseif i == 1 then\
-\9\9return q, v, p\
-\9elseif i == 2 then\
-\9\9return p, v, t\
-\9elseif i == 3 then\
-\9\9return p, q, v\
-\9elseif i == 4 then\
-\9\9return t, p, v\
-\9else\
-\9\9return v, p, q\
-\9end\
-end\
-\
-function hsv_to_hsl(h, s, v) --TODO: direct conversion\
-\9return rgb_to_hsl(hsv_to_rgb(h, s, v))\
-end\
-\
-function hsl_to_hsv(h, s, l) --TODO: direct conversion\
-\9return rgb_to_hsv(hsl_to_rgb(h, s, l))\
-end\
-\
-local converters = {\
-\9rgb = {hsl = rgb_to_hsl, hsv = rgb_to_hsv},\
-\9hsl = {rgb = hsl_to_rgb, hsv = hsl_to_hsv},\
-\9hsv = {rgb = hsv_to_rgb, hsl = hsv_to_hsl},\
-}\
-local function convert(dest_space, space, x, y, z, ...)\
-\9if space ~= dest_space then\
-\9\9x, y, z = converters[space][dest_space](x, y, z)\
-\9end\
-\9return x, y, z, ...\
-end\
-\
---parsing --------------------------------------------------------------------\
-\
-local hex = {\
-\9[4] = {'#rgb',      'rgb'},\
-\9[5] = {'#rgba',     'rgb'},\
-\9[7] = {'#rrggbb',   'rgb'},\
-\9[9] = {'#rrggbbaa', 'rgb'},\
-}\
-local s3 = {\
-\9hsl = {'hsl', 'hsl'},\
-\9hsv = {'hsv', 'hsv'},\
-\9rgb = {'rgb', 'rgb'},\
-}\
-local s4 = {\
-\9hsla = {'hsla', 'hsl'},\
-\9hsva = {'hsva', 'hsv'},\
-\9rgba = {'rgba', 'rgb'},\
-}\
-local function string_format(s)\
-\9local t\
-\9if s:sub(1, 1) == '#' then\
-\9\9t = hex[#s]\
-\9else\
-\9\9t = s4[s:sub(1, 4)] or s3[s:sub(1, 3)]\
-\9end\
-\9if t then\
-\9\9return t[1], t[2] --format, colorspace\
-\9end\
-end\
-\
-local parsers = {}\
-\
-local function parse(s)\
-\9local r = tonumber(s:sub(2, 2), 16)\
-\9local g = tonumber(s:sub(3, 3), 16)\
-\9local b = tonumber(s:sub(4, 4), 16)\
-\9if not (r and g and b) then return end\
-\9r = (r * 16 + r) / 255\
-\9g = (g * 16 + g) / 255\
-\9b = (b * 16 + b) / 255\
-\9if #s == 5 then\
-\9\9local a = tonumber(s:sub(5, 5), 16)\
-\9\9if not a then return end\
-\9\9return r, g, b, (a * 16 + a) / 255\
-\9else\
-\9\9return r, g, b\
-\9end\
-end\
-parsers['#rgb']  = parse\
-parsers['#rgba'] = parse\
-\
-local function parse(s)\
-\9local r = tonumber(s:sub(2, 3), 16)\
-\9local g = tonumber(s:sub(4, 5), 16)\
-\9local b = tonumber(s:sub(6, 7), 16)\
-\9if not (r and g and b) then return end\
-\9r = r / 255\
-\9g = g / 255\
-\9b = b / 255\
-\9if #s == 9 then\
-\9\9local a = tonumber(s:sub(8, 9), 16)\
-\9\9if not a then return end\
-\9\9return r, g, b, a / 255\
-\9else\
-\9\9return r, g, b\
-\9end\
-end\
-parsers['#rrggbb']  = parse\
-parsers['#rrggbbaa'] = parse\
-\
-local rgb_patt = '^rgb%s*%(([^,]+),([^,]+),([^,]+)%)$'\
-local rgba_patt = '^rgba%s*%(([^,]+),([^,]+),([^,]+),([^,]+)%)$'\
-\
-local function parse(s)\
-\9local r, g, b, a = s:match(rgba_patt)\
-\9r = tonumber(r)\
-\9g = tonumber(g)\
-\9b = tonumber(b)\
-\9a = tonumber(a)\
-\9if not (r and g and b and a) then return end\
-\9return\
-\9\9r / 255,\
-\9\9g / 255,\
-\9\9b / 255,\
-\9\9a\
-end\
-parsers.rgba = parse\
-\
-local function parse(s)\
-\9local r, g, b = s:match(rgb_patt)\
-\9r = tonumber(r)\
-\9g = tonumber(g)\
-\9b = tonumber(b)\
-\9if not (r and g and b) then return end\
-\9return\
-\9\9r / 255,\
-\9\9g / 255,\
-\9\9b / 255\
-end\
-parsers.rgb = parse\
-\
-local hsl_patt = '^hsl%s*%(([^,]+),([^,]+),([^,]+)%)$'\
-local hsla_patt = '^hsla%s*%(([^,]+),([^,]+),([^,]+),([^,]+)%)$'\
-\
-local hsv_patt = hsl_patt:gsub('hsl', 'hsv')\
-local hsva_patt = hsla_patt:gsub('hsla', 'hsva')\
-\
-local function np(s)\
-\9local p = s and tonumber((s:match'^([^%%]+)%%%s*$'))\
-\9return p and p * .01 or tonumber(s)\
-end\
-\
-local function parser(patt)\
-\9return function(s)\
-\9\9local h, s, x, a = s:match(patt)\
-\9\9h = tonumber(h)\
-\9\9s = np(s)\
-\9\9x = np(x)\
-\9\9a = tonumber(a)\
-\9\9if not (h and s and x and a) then return end\
-\9\9return h, s, x, a\
-\9end\
-end\
-parsers.hsla = parser(hsla_patt)\
-parsers.hsva = parser(hsva_patt)\
-\
-local function parser(patt)\
-\9return function(s)\
-\9\9local h, s, x = s:match(patt)\
-\9\9h = tonumber(h)\
-\9\9s = np(s)\
-\9\9x = np(x)\
-\9\9if not (h and s and x) then return end\
-\9\9return h, s, x\
-\9end\
-end\
-parsers.hsl = parser(hsl_patt)\
-parsers.hsv = parser(hsv_patt)\
-\
-local function parse(s, dest_space)\
-\9local fmt, space = string_format(s)\
-\9if not fmt then return end\
-\9local parse = parsers[fmt]\
-\9if not parse then return end\
-\9if dest_space then\
-\9\9return convert(dest_space, space, parse(s))\
-\9else\
-\9\9return space, parse(s)\
-\9end\
-end\
-\
---formatting -----------------------------------------------------------------\
-\
-local format_spaces = {\
-\9['#'] = 'rgb',\
-\9['#rrggbbaa'] = 'rgb', ['#rrggbb'] = 'rgb',\
-\9['#rgba'] = 'rgb', ['#rgb'] = 'rgb', rgba = 'rgb', rgb = 'rgb',\
-\9hsla = 'hsl', hsl = 'hsl', ['hsla%'] = 'hsl', ['hsl%'] = 'hsl',\
-\9hsva = 'hsv', hsv = 'hsv', ['hsva%'] = 'hsv', ['hsv%'] = 'hsv',\
-}\
-\
-local function loss(x) --...of precision when converting to #rgb\
-\9return math.abs(x * 15 - round(x * 15))\
-end\
-local threshold = math.abs(loss(0x89 / 255))\
-local function short(x)\
-\9return loss(x) < threshold\
-end\
-\
-local function format(fmt, space, x, y, z, a)\
-\9fmt = fmt or space --the names match\
-\9local dest_space = format_spaces[fmt]\
-\9if not dest_space then\
-\9\9error('invalid format '..tostring(fmt))\
-\9end\
-\9x, y, z, a = convert(dest_space, space, x, y, z, a)\
-\9if fmt == '#' then --shortest hex\
-\9\9if short(x) and short(y) and short(z) and short(a or 1) then\
-\9\9\9fmt = a and '#rgba' or '#rgb'\
-\9\9else\
-\9\9\9fmt = a and '#rrggbbaa' or '#rrggbb'\
-\9\9end\
-\9end\
-\9a = a or 1\
-\9if fmt == '#rrggbbaa' or fmt == '#rrggbb' then\
-\9\9return string.format(\
-\9\9\9fmt == '#rrggbbaa' and '#%02x%02x%02x%02x' or '#%02x%02x%02x',\
-\9\9\9\9round(x * 255),\
-\9\9\9\9round(y * 255),\
-\9\9\9\9round(z * 255),\
-\9\9\9\9round(a * 255))\
-\9elseif fmt == '#rgba' or fmt == '#rgb' then\
-\9\9return string.format(\
-\9\9\9fmt == '#rgba' and '#%1x%1x%1x%1x' or '#%1x%1x%1x',\
-\9\9\9\9round(x * 15),\
-\9\9\9\9round(y * 15),\
-\9\9\9\9round(z * 15),\
-\9\9\9\9round(a * 15))\
-\9elseif fmt == 'rgba' or fmt == 'rgb' then\
-\9\9return string.format(\
-\9\9\9fmt == 'rgba' and 'rgba(%d,%d,%d,%.2g)' or 'rgb(%d,%d,%g)',\
-\9\9\9\9round(x * 255),\
-\9\9\9\9round(y * 255),\
-\9\9\9\9round(z * 255),\
-\9\9\9\9a)\
-\9elseif fmt:sub(-1) == '%' then --hsl|v(a)%\
-\9\9return string.format(\
-\9\9\9#fmt == 5 and '%s(%d,%d%%,%d%%,%.2g)' or '%s(%d,%d%%,%d%%)',\
-\9\9\9\9fmt:sub(1, -2),\
-\9\9\9\9round(x),\
-\9\9\9\9round(y * 100),\
-\9\9\9\9round(z * 100),\
-\9\9\9\9a)\
-\9else --hsl|v(a)\
-\9\9return string.format(\
-\9\9\9#fmt == 4 and '%s(%d,%.2g,%.2g,%.2g)' or '%s(%d,%.2g,%.2g)',\
-\9\9\9\9fmt, round(x), y, z, a)\
-\9end\
-end\
-\
---color object ---------------------------------------------------------------\
-\
-local color = {}\
-\
---new([space, ]x, y, z[, a])\
---new([space, ]'str')\
---new([space, ]{x, y, z[, a]})\
-local function new(space, x, y, z, a)\
-\9if not (type(space) == 'string' and x) then --shift args\
-\9\9space, x, y, z, a = 'hsl', space, x, y, z\
-\9end\
-\9local h, s, L\
-\9if type(x) == 'string' then\
-\9\9h, s, L, a = parse(x, 'hsl')\
-\9else\
-\9\9if type(x) == 'table' then\
-\9\9\9x, y, z, a = x[1], x[2], x[3], x[4]\
-\9\9end\
-\9\9h, s, L, a = convert('hsl', space, clamp(space, x, y, z, a))\
-\9end\
-\9local c = {\
-\9\9h = h, s = s, L = L, a = a,\
-\9\9__index = color,\
-\9\9__tostring = color.__tostring,\
-\9\9__call = color.__call,\
-\9}\
-\9return setmetatable(c, c)\
-end\
-\
-local function new_with(space)\
-\9return function(...)\
-\9\9return new(space, ...)\
-\9end\
-end\
-\
-function color:__call() return self.h, self.s, self.L, self.a end\
-function color:hsl() return self.h, self.s, self.L end\
-function color:hsla() return self.h, self.s, self.L, self.a or 1 end\
-function color:hsv() return convert('hsv', 'hsl', self:hsl()) end\
-function color:hsva() return convert('hsv', 'hsl', self:hsla()) end\
-function color:rgb() return convert('rgb', 'hsl', self:hsl()) end\
-function color:rgba() return convert('rgb', 'hsl', self:hsla()) end\
-function color:convert(space) return convert(space, 'hsl', self:hsla()) end\
-function color:format(fmt) return format(fmt, 'hsl', self()) end\
-\
-function color:__tostring()\
-\9return self:format'#'\
-end\
-\
-function color:hue_offset(delta)\
-\9return new(self.h + delta, self.s, self.L)\
-end\
-\
-function color:complementary()\
-\9return self:hue_offset(180)\
-end\
-\
-function color:neighbors(angle)\
-\9local angle = angle or 30\
-\9return self:hue_offset(angle), self:hue_offset(360-angle)\
-end\
-\
-function color:triadic()\
-\9return self:neighbors(120)\
-end\
-\
-function color:split_complementary(angle)\
-\9return self:neighbors(180-(angle or 30))\
-end\
-\
-function color:desaturate_to(saturation)\
-\9return new(self.h, saturation, self.L)\
-end\
-\
-function color:desaturate_by(r)\
-\9return new(self.h, self.s*r, self.L)\
-end\
-\
-function color:lighten_to(lightness)\
-\9return new(self.h, self.s, lightness)\
-end\
-\
-function color:lighten_by(r)\
-\9return new(self.h, self.s, self.L*r)\
-end\
-\
-function color:bw(whiteL)\
-\9return new(self.h, self.s, self.L >= (whiteL or .5) and 0 or 1)\
-end\
-\
-function color:variations(f, n)\
-\9n = n or 5\
-\9local results = {}\
-\9for i=1,n do\
-\9  table.insert(results, f(self, i, n))\
-\9end\
-\9return results\
-end\
-\
-function color:tints(n)\
-\9return self:variations(function(color, i, n)\
-\9\9return color:lighten_to(color.L + (1-color.L)/n*i)\
-\9end, n)\
-end\
-\
-function color:shades(n)\
-\9return self:variations(function(color, i, n)\
-\9\9return color:lighten_to(color.L - (color.L)/n*i)\
-\9end, n)\
-end\
-\
-function color:tint(r)\
-\9return self:lighten_to(self.L + (1-self.L)*r)\
-end\
-\
-function color:shade(r)\
-\9return self:lighten_to(self.L - self.L*r)\
-end\
-\
---module ---------------------------------------------------------------------\
-\
-exports.clamp = clamp\
-exports.convert = convert\
-exports.parse = parse\
-exports.format = format\
-exports.hsl = new_with 'hsl'\
-exports.hsv = new_with 'hsv'\
-exports.rgb = new_with 'rgb'\
-exports.new = new",
 ['msva/htmlparser/ElementNode'] = "-- vim: ft=lua ts=2\
 local Set = {}\
 Set.mt = {__index = Set}\
@@ -3357,11 +2860,11 @@ local VirtualFileSystem\
 VirtualFileSystem = dependency(\"novacbn/luvit-extras/vfs\").VirtualFileSystem\
 local FileSystemAdapter\
 FileSystemAdapter = dependency(\"novacbn/luvit-extras/adapters/FileSystemAdapter\").FileSystemAdapter\
-local parse\
-parse = dependency(\"sebcat/markdown/exports\").parse\
 local fsx = dependency(\"novacbn/luvit-extras/fs\")\
 local Theme\
 Theme = dependency(\"novacbn/lunarbook/api/Theme\").Theme\
+local PluginManager\
+PluginManager = dependency(\"novacbn/lunarbook/api/PluginManager\").PluginManager\
 local ALLOWED_FRAGMENT_TYPES, BOOK_HOME, BUILD_DIRS\
 do\
   local _obj_0 = dependency(\"novacbn/lunarbook/lib/constants\")\
@@ -3372,17 +2875,18 @@ do\
   local _obj_0 = dependency(\"novacbn/lunarbook/lib/utilities\")\
   extractSections, extractTitle = _obj_0.extractSections, _obj_0.extractTitle\
 end\
-local slugify\
-slugify = dependency(\"novacbn/lunarbook/lib/utilities/string\").slugify\
+local endswith, slugify\
+do\
+  local _obj_0 = dependency(\"novacbn/lunarbook/lib/utilities/string\")\
+  endswith, slugify = _obj_0.endswith, _obj_0.slugify\
+end\
 local isdirSync, isfileSync, join\
 do\
   local _obj_0 = dependency(\"novacbn/lunarbook/lib/utilities/vfs\")\
   isdirSync, isfileSync, join = _obj_0.isdirSync, _obj_0.isfileSync, _obj_0.join\
 end\
-local TEMPLATE_LAYOUT_ASSETS\
-TEMPLATE_LAYOUT_ASSETS = function(layout, name, hasStyle, hasScript)\
-  return tostring(layout) .. tostring(hasStyle and '\\n<link rel=\\'stylesheet\\' href=\\'/assets/styles/_component.' .. name .. '.css\\' />' or '') .. tostring(hasScript and '\\n<script type=\\'application/javascript\\' src=\\'/assets/scripts/_component.' .. name .. '.js\\'></script>' or '')\
-end\
+local LunarConfig\
+LunarConfig = dependency(\"novacbn/lunarbook/schemas/LunarConfig\").LunarConfig\
 local ProcessedFragment\
 ProcessedFragment = function(render, link, title, sections)\
   return {\
@@ -3395,7 +2899,10 @@ end\
 do\
   local _with_0 = Object:extend()\
   _with_0.cache = nil\
-  _with_0.includes = nil\
+  _with_0.configuration = nil\
+  _with_0.layoutEnvironment = nil\
+  _with_0.plugins = nil\
+  _with_0.styleEnvironment = nil\
   _with_0.theme = nil\
   _with_0.vfs = nil\
   _with_0.initialize = function(self, bookDirectory, buildDirectory, themeDirectory)\
@@ -3412,8 +2919,14 @@ do\
         propertiesEncoder = \"moonscript\"\
       })\
     end\
+    local err\
+    self.configuration, err = LunarConfig:transform(configuration)\
+    if err then\
+      error(\"bad dispatch to 'initialize' (malformed book config)\\n\" .. tostring(err))\
+    end\
     self.cache = { }\
-    self.theme = Theme:new(themeDirectory, configuration.theme)\
+    self.plugins = PluginManager:new()\
+    self.theme = Theme:new(themeDirectory, self.configuration.theme)\
     self.vfs = VirtualFileSystem:new()\
     self.vfs:mount(\"book\", FileSystemAdapter:new(bookDirectory))\
     self.vfs:mount(\"build\", FileSystemAdapter:new(buildDirectory))\
@@ -3427,17 +2940,56 @@ do\
       self.vfs:mkdirSync(BUILD_DIRS.scripts)\
     end\
     if not (isdirSync(self.vfs, BUILD_DIRS.styles)) then\
-      return self.vfs:mkdirSync(BUILD_DIRS.styles)\
+      self.vfs:mkdirSync(BUILD_DIRS.styles)\
+    end\
+    self:initializePlugins()\
+    return self:initializeAssets()\
+  end\
+  _with_0.initializeAssets = function(self)\
+    local _list_0 = self.theme:getIncludedAssets()\
+    for _index_0 = 1, #_list_0 do\
+      local asset = _list_0[_index_0]\
+      self.vfs:writeFileSync(join(BUILD_DIRS.assets, asset.name), asset.contents)\
+    end\
+    do\
+      local _accum_0 = { }\
+      local _len_0 = 1\
+      local _list_1 = self.theme:getIncludedAssets()\
+      for _index_0 = 1, #_list_1 do\
+        local asset = _list_1[_index_0]\
+        if endswith(lower(asset.name), \".js\") then\
+          _accum_0[_len_0] = \"assets/\" .. asset.name\
+          _len_0 = _len_0 + 1\
+        end\
+      end\
+      self.theme.configuration.environment.scripts = _accum_0\
+    end\
+    do\
+      local _accum_0 = { }\
+      local _len_0 = 1\
+      local _list_1 = self.theme:getIncludedAssets()\
+      for _index_0 = 1, #_list_1 do\
+        local asset = _list_1[_index_0]\
+        if endswith(lower(asset.name), \".css\") then\
+          _accum_0[_len_0] = \"assets/\" .. asset.name\
+          _len_0 = _len_0 + 1\
+        end\
+      end\
+      self.theme.configuration.environment.styles = _accum_0\
     end\
   end\
-  _with_0.createFragment = function(self, file, navigation, fragments)\
+  _with_0.initializePlugins = function(self)\
+    self.plugins:processConfiguration(self.configuration.plugins)\
+    self.transformers = self.plugins:configureTransformers()\
+    self.layoutEnvironment = self.plugins:configureLayoutEnvironment():clone()\
+    self.styleEnvironment = self.plugins:configureStyleEnvironment():clone()\
+  end\
+  _with_0.createFragment = function(self, file, fragments)\
     local fragment = self:processFragment(file)\
-    local render = self.theme:render(\"Index\", {\
-      fragment = join(\"assets/fragments\", fragment.link),\
-      includes = self:getIncludes(),\
-      navigation = navigation\
+    local layout = self.theme:render(\"Index\", true, self.layoutEnvironment, {\
+      fragment = fragment.render,\
+      navigation = fragments\
     })\
-    local layout = TEMPLATE_LAYOUT_ASSETS(render.layout, \"Index\", render.style and true, render.script and true)\
     local link = join(BUILD_DIRS.fragments, fragment.link)\
     if not (isdirSync(self.vfs, link)) then\
       self.vfs:mkdirSync(link)\
@@ -3448,97 +3000,14 @@ do\
     end\
     return self.vfs:writeFileSync(BUILD_DIRS.scheme .. join(fragment.link, \"index.html\"), layout)\
   end\
-  _with_0.createNavigation = function(self, directory, files)\
-    local fragments\
-    do\
-      local _accum_0 = { }\
-      local _len_0 = 1\
-      for _index_0 = 1, #files do\
-        local fragment = files[_index_0]\
-        _accum_0[_len_0] = self:processFragment(join(directory, fragment))\
-        _len_0 = _len_0 + 1\
-      end\
-      fragments = _accum_0\
-    end\
-    local render = self.theme:render(\"Navigation\", {\
-      fragments = fragments,\
-      includes = self:getIncludes()\
-    })\
-    local layout = TEMPLATE_LAYOUT_ASSETS(render.layout, \"Navigation\", render.style and true, render.script and true)\
-    return self.vfs:writeFileSync(join(BUILD_DIRS.fragments, directory, \"_navigation.html\"), layout)\
-  end\
-  _with_0.getIncludes = function(self)\
-    if not (self.includes) then\
-      local scripts\
-      do\
-        local _accum_0 = { }\
-        local _len_0 = 1\
-        local _list_0 = self.theme:getIncludedAssets()\
-        for _index_0 = 1, #_list_0 do\
-          local asset = _list_0[_index_0]\
-          if asset.type == \"script\" then\
-            _accum_0[_len_0] = \"/\" .. join(\"assets\", \"scripts\", asset.name)\
-            _len_0 = _len_0 + 1\
-          end\
-        end\
-        scripts = _accum_0\
-      end\
-      local styles\
-      do\
-        local _accum_0 = { }\
-        local _len_0 = 1\
-        local _list_0 = self.theme:getIncludedAssets()\
-        for _index_0 = 1, #_list_0 do\
-          local asset = _list_0[_index_0]\
-          if asset.type == \"style\" then\
-            _accum_0[_len_0] = \"/\" .. join(\"assets\", \"styles\", asset.name)\
-            _len_0 = _len_0 + 1\
-          end\
-        end\
-        styles = _accum_0\
-      end\
-      self.includes = {\
-        scripts = scripts,\
-        styles = styles\
-      }\
-    end\
-    return self.includes\
-  end\
-  _with_0.loadFragment = function(self, file, vfs)\
-    local contents = self.vfs:readFileSync(\"book://\" .. file)\
-    local extension = extname(file)\
-    if extension == \".md\" then\
-      return parse(contents)\
-    elseif extension == \".html\" then\
-      return contents\
-    end\
-    return error(\"bad argument #1 to 'processFragment' (unexpected fragment type)\")\
-  end\
   _with_0.processBook = function(self)\
     self:processDirectory(\"\")\
     local _list_0 = self.cache\
     for _index_0 = 1, #_list_0 do\
       local fragment = _list_0[_index_0]\
-      self.vfs:writeFileSync(join(BUILD_DIRS.fragments, fragment.link, \"index.html\"), fragment.render)\
+      self.vfs:writeFileSync(join(BUILD_DIRS.fragments, fragment.link .. \".html\"), fragment.render)\
     end\
-    for name, component in pairs(self.theme.cache) do\
-      if component.script then\
-        self.vfs:writeFileSync(join(BUILD_DIRS.scripts, \"_component.\" .. tostring(name) .. \".js\"), component.script)\
-      end\
-      if component.style then\
-        self.vfs:writeFileSync(join(BUILD_DIRS.styles, \"_component.\" .. tostring(name) .. \".css\"), component.style)\
-      end\
-    end\
-    local _list_1 = self.theme:getIncludedAssets()\
-    for _index_0 = 1, #_list_1 do\
-      local asset = _list_1[_index_0]\
-      if asset.type == \"script\" then\
-        self.vfs:writeFileSync(join(BUILD_DIRS.scripts, asset.name), readFileSync(asset.path))\
-      end\
-      if asset.type == \"style\" then\
-        self.vfs:writeFileSync(join(BUILD_DIRS.styles, asset.name), readFileSync(asset.path))\
-      end\
-    end\
+    return self.vfs:writeFileSync(join(BUILD_DIRS.styles, \"lunarbook.components.css\"), self.theme:getComputedStyle(true, self.styleEnvironment))\
   end\
   _with_0.processDirectory = function(self, directory)\
     local entries = self.vfs:readdirSync(\"book://\" .. directory)\
@@ -3591,33 +3060,30 @@ do\
       local entry = directories[_index_0]\
       self:processDirectory(join(directory, entry))\
     end\
-    for _index_0 = 1, #files do\
-      local entry = files[_index_0]\
-      self:createFragment(join(directory, entry), #files > 1 and join(\"assets\", \"fragments\", directory, \"_navigation.html\"), fragments)\
-    end\
-    if #files > 1 then\
-      return self:createNavigation(directory, files)\
+    local _list_0 = files\
+    for _index_0 = 1, #_list_0 do\
+      local entry = _list_0[_index_0]\
+      self:createFragment(join(directory, entry), #fragments > 1 and fragments)\
     end\
   end\
   _with_0.processFragment = function(self, file)\
     if not (self.cache[file]) then\
-      local contents = self:loadFragment(file)\
-      local render = self.theme:render(\"Fragment\", {\
-        fragment = contents,\
-        includes = self:getIncludes()\
+      local contents = self.vfs:readFileSync(\"book://\" .. file)\
+      contents = self.transformers:processFragment(file, false, contents)\
+      local layout = self.theme:render(\"Fragment\", true, self.layoutEnvironment, {\
+        fragment = contents\
       })\
       local link = dirname(file)\
       if link == \".\" then\
         link = \"\"\
       end\
-      local title = extractTitle(render.layout)\
+      local title = extractTitle(layout)\
       if not (basename(file, extname(file)) == \"index\") then\
         link = join(link, slugify(title))\
         if not (#link > 0) then\
           error(\"bad argument #1 to 'processFragment' (missing or malformed title)\")\
         end\
       end\
-      local layout = TEMPLATE_LAYOUT_ASSETS(render.layout, \"Fragment\", render.style and true, render.script and true)\
       local sections\
       do\
         local _accum_0 = { }\
@@ -3626,8 +3092,8 @@ do\
         for _index_0 = 1, #_list_0 do\
           local section = _list_0[_index_0]\
           _accum_0[_len_0] = {\
-            name = section,\
-            slug = slugify(section)\
+            title = section,\
+            link = link .. \"#\" .. slugify(section)\
           }\
           _len_0 = _len_0 + 1\
         end\
@@ -3639,156 +3105,131 @@ do\
   end\
   Book = _with_0\
 end",
-['novacbn/lunarbook/api/Layout'] = "local ipairs, pairs, setfenv, setmetatable, tostring, type\
+['novacbn/lunarbook/api/ChunkEnvironment'] = "local type\
+type = _G.type\
+local Object\
+Object = require(\"core\").Object\
+do\
+  local _with_0 = Object:extend()\
+  _with_0.environment = nil\
+  _with_0.initialize = function(self)\
+    self.environment = { }\
+  end\
+  _with_0.clone = function(self)\
+    local _tbl_0 = { }\
+    for key, value in pairs(self.environment) do\
+      _tbl_0[key] = value\
+    end\
+    return _tbl_0\
+  end\
+  _with_0.registerVariable = function(self, name, value)\
+    if not (type(name) == \"string\") then\
+      error(\"bad argument #1 to 'registerVariable' (expected string)\")\
+    end\
+    if self.environment[name] then\
+      error(\"bad argument #1 to 'registerVariable' (pre-existing name)\")\
+    end\
+    self.environment[name] = value\
+  end\
+  ChunkEnvironment = _with_0\
+end",
+['novacbn/lunarbook/api/PluginManager'] = "local type\
+type = _G.type\
+local Object\
+Object = require(\"core\").Object\
+local ChunkEnvironment\
+ChunkEnvironment = dependency(\"novacbn/lunarbook/api/ChunkEnvironment\").ChunkEnvironment\
+local Transformers\
+Transformers = dependency(\"novacbn/lunarbook/api/Transformers\").Transformers\
+local LOADED_PLUGINS = {\
+  {\
+    name = builtin,\
+    exports = loadfile(dependency(\"novacbn/lunarbook/lib/constants\").BOOK_HOME.plugins .. \"/lunarbook-plugin-builtin.lua\")()\
+  }\
+}\
+local LoadedPlugin\
+LoadedPlugin = function(name, exports)\
+  return {\
+    exports = exports,\
+    name = name\
+  }\
+end\
+do\
+  local _with_0 = Object:extend()\
+  _with_0.plugins = nil\
+  _with_0.initialize = function(self, plugins)\
+    if plugins == nil then\
+      plugins = LOADED_PLUGINS\
+    end\
+    self.plugins = plugins\
+  end\
+  _with_0.dispatch = function(self, name, ...)\
+    local _list_0 = self.plugins\
+    for _index_0 = 1, #_list_0 do\
+      local plugin = _list_0[_index_0]\
+      if plugin.exports[name] then\
+        plugin.exports[name](...)\
+      end\
+    end\
+  end\
+  _with_0.configureLayoutEnvironment = function(self, environment)\
+    if environment == nil then\
+      environment = ChunkEnvironment:new()\
+    end\
+    if not (type(environment) == \"table\") then\
+      error(\"bad argument #1 to 'configureLayoutEnvironment' (expected ChunkEnvironment)\")\
+    end\
+    self:dispatch(\"configureLayoutEnvironment\", environment)\
+    return environment\
+  end\
+  _with_0.configureStyleEnvironment = function(self, environment)\
+    if environment == nil then\
+      environment = ChunkEnvironment:new()\
+    end\
+    if not (type(environment) == \"table\") then\
+      error(\"bad argument #1 to 'configureStyleEnvironment' (expected ChunkEnvironment)\")\
+    end\
+    self:dispatch(\"configureStyleEnvironment\", environment)\
+    return environment\
+  end\
+  _with_0.configureTransformers = function(self, transformers)\
+    if transformers == nil then\
+      transformers = Transformers:new()\
+    end\
+    if not (type(transformers) == \"table\") then\
+      error(\"bad argument #1 to 'configureTransformers' (expected Transformers)\")\
+    end\
+    self:dispatch(\"configureTransformers\", transformers)\
+    return transformers\
+  end\
+  _with_0.processConfiguration = function(self, configuration)\
+    if not (type(configuration) == \"table\") then\
+      error(\"bad argument #1 to 'processConfiguration' (expected table)\")\
+    end\
+    local err\
+    local _list_0 = self.plugins\
+    for _index_0 = 1, #_list_0 do\
+      local plugin = _list_0[_index_0]\
+      if plugin.exports.processConfiguration and configuration[plugin.name] ~= nil then\
+        err = plugin.exports.processConfiguration(configuration[plugin.name])\
+        if err then\
+          error(\"bad dispatch to 'processConfiguration' (malformed configuration)\\n\" .. tostring(err))\
+        end\
+      end\
+    end\
+  end\
+  PluginManager = _with_0\
+end",
+['novacbn/lunarbook/api/Theme'] = "local loadstring, pcall, setfenv, type\
 do\
   local _obj_0 = _G\
-  ipairs, pairs, setfenv, setmetatable, tostring, type = _obj_0.ipairs, _obj_0.pairs, _obj_0.setfenv, _obj_0.setmetatable, _obj_0.tostring, _obj_0.type\
+  loadstring, pcall, setfenv, type = _obj_0.loadstring, _obj_0.pcall, _obj_0.setfenv, _obj_0.type\
 end\
 local concat, insert\
 do\
   local _obj_0 = table\
   concat, insert = _obj_0.concat, _obj_0.insert\
 end\
-local dashcase\
-dashcase = dependency(\"novacbn/lunarbook/lib/utilities/string\").dashcase\
-local LayoutEnv = {\
-  ipairs = ipairs,\
-  print = print,\
-  pairs = pairs,\
-  tostring = tostring\
-}\
-LayoutEnv.__index = LayoutEnv\
-Layout = function(chunk, env, stylesheet)\
-  if stylesheet == nil then\
-    stylesheet = { }\
-  end\
-  if not (type(chunk) == \"function\") then\
-    error(\"bad argument #1 to 'Layout' (expected function)\")\
-  end\
-  if not (type(env) == \"table\") then\
-    error(\"bad argument #2 to 'Layout' (expected table)\")\
-  end\
-  if not (type(stylesheet) == \"table\") then\
-    error(\"bad argument #3 to 'Layout' (expected table)\")\
-  end\
-  local buffer\
-  local tag\
-  tag = function(name, attributes, value)\
-    insert(buffer, \"<\" .. name)\
-    local attributesType = type(attributes)\
-    if attributesType == \"function\" or attributesType == \"string\" then\
-      value = attributes\
-      attributes = nil\
-    end\
-    if attributes then\
-      for attribute, value in pairs(attributes) do\
-        attribute = dashcase(attribute)\
-        if value == true then\
-          insert(buffer, \" \" .. attribute)\
-        else\
-          insert(buffer, \" \" .. attribute .. \"='\" .. tostring(value) .. \"'\")\
-        end\
-      end\
-    end\
-    local valueType = type(value)\
-    if valueType == \"string\" then\
-      return insert(buffer, \">\" .. value .. \"</\" .. name .. \">\")\
-    elseif valueType == \"function\" then\
-      insert(buffer, \">\")\
-      value()\
-      return insert(buffer, \"</\" .. name .. \">\")\
-    else\
-      return insert(buffer, \" />\")\
-    end\
-  end\
-  local chunkenv = {\
-    __index = function(self, key)\
-      if LayoutEnv[key] ~= nil then\
-        return LayoutEnv[key]\
-      end\
-      return function(...)\
-        return tag(dashcase(key), ...)\
-      end\
-    end\
-  }\
-  chunkenv = setmetatable({ }, chunkenv)\
-  chunk = setfenv(chunk, chunkenv)()\
-  return function(state)\
-    buffer = { }\
-    chunk(state, env, stylesheet)\
-    local output = concat(buffer, \"\")\
-    buffer = nil\
-    return output\
-  end\
-end",
-['novacbn/lunarbook/api/Stylesheet'] = "local getmetatable, pairs, setfenv, setmetatable, type\
-do\
-  local _obj_0 = _G\
-  getmetatable, pairs, setfenv, setmetatable, type = _obj_0.getmetatable, _obj_0.pairs, _obj_0.setfenv, _obj_0.setmetatable, _obj_0.type\
-end\
-local Object\
-Object = require(\"core\").Object\
-local encode\
-encode = dependency(\"novacbn/lunarbook/lib/stylesheet\").encode\
-local TABLE_INCLUDED_ENV = {\
-  dependency(\"novacbn/lunarbook/lib/stylesheet/color\")\
-}\
-local StylesheetEnv = {\
-  tostring = tostring\
-}\
-StylesheetEnv.__index = StylesheetEnv\
-for _index_0 = 1, #TABLE_INCLUDED_ENV do\
-  local exports = TABLE_INCLUDED_ENV[_index_0]\
-  for key, value in pairs(getmetatable(exports).__index) do\
-    StylesheetEnv[key] = value\
-  end\
-end\
-Stylesheet = function(name, chunk, env)\
-  if not (type(name) == \"string\") then\
-    error(\"bad argument #1 to 'Stylesheet' (expected string)\")\
-  end\
-  if not (type(chunk) == \"function\") then\
-    error(\"bad argument #2 to 'Stylesheet' (expected function)\")\
-  end\
-  if not (type(env) == \"table\") then\
-    error(\"bad argument #3 to 'Stylesheet' (expected table)\")\
-  end\
-  local chunkenv = setmetatable({\
-    env = env\
-  }, StylesheetEnv)\
-  chunkenv.__index = chunkenv\
-  chunkenv = setmetatable({ }, chunkenv)\
-  chunk = setfenv(chunk, chunkenv)\
-  local rules = chunk()\
-  local classes\
-  do\
-    local _tbl_0 = { }\
-    for selector, states in pairs(rules) do\
-      _tbl_0[selector] = \"component-\" .. tostring(name) .. \"-\" .. tostring(selector)\
-    end\
-    classes = _tbl_0\
-  end\
-  local contents\
-  do\
-    local _tbl_0 = { }\
-    for selector, states in pairs(rules) do\
-      _tbl_0[\"component-\" .. tostring(name) .. \"-\" .. tostring(selector)] = states\
-    end\
-    contents = _tbl_0\
-  end\
-  contents = encode(contents)\
-  return {\
-    classes = classes,\
-    contents = contents\
-  }\
-end",
-['novacbn/lunarbook/api/Theme'] = "local loadstring, pairs, type\
-do\
-  local _obj_0 = _G\
-  loadstring, pairs, type = _obj_0.loadstring, _obj_0.pairs, _obj_0.type\
-end\
-local insert\
-insert = table.insert\
 local Object\
 Object = require(\"core\").Object\
 local basename, extname, join\
@@ -3796,8 +3237,6 @@ do\
   local _obj_0 = require(\"path\")\
   basename, extname, join = _obj_0.basename, _obj_0.extname, _obj_0.join\
 end\
-local encode\
-encode = require(\"json\").encode\
 local decode\
 decode = dependency(\"novacbn/properties/exports\").decode\
 local createHash\
@@ -3806,46 +3245,15 @@ local VirtualFileSystem\
 VirtualFileSystem = dependency(\"novacbn/luvit-extras/vfs\").VirtualFileSystem\
 local FileSystemAdapter\
 FileSystemAdapter = dependency(\"novacbn/luvit-extras/adapters/FileSystemAdapter\").FileSystemAdapter\
+local layoutViz = dependency(\"novacbn/lunarviz/layout\")\
 local moonscript = require(\"moonscript/base\")\
-local Layout\
-Layout = dependency(\"novacbn/lunarbook/api/Layout\").Layout\
-local Stylesheet\
-Stylesheet = dependency(\"novacbn/lunarbook/api/Stylesheet\").Stylesheet\
-local BOOK_HOME\
-BOOK_HOME = dependency(\"novacbn/lunarbook/lib/constants\").BOOK_HOME\
+local styleViz = dependency(\"novacbn/lunarviz/style\")\
+local merge\
+merge = dependency(\"novacbn/lunarbook/lib/utilities/table\").merge\
 local isfileSync\
 isfileSync = dependency(\"novacbn/lunarbook/lib/utilities/vfs\").isfileSync\
 local ThemeConfig\
 ThemeConfig = dependency(\"novacbn/lunarbook/schemas/ThemeConfig\").ThemeConfig\
-local MAP_ASSET_TYPES = {\
-  [\".js\"] = \"script\",\
-  [\".css\"] = \"style\"\
-}\
-local TEMPLATE_STYLESHEET_MOONSCRIPT\
-TEMPLATE_STYLESHEET_MOONSCRIPT = function(code)\
-  return \"return { \" .. tostring(code) .. \" }\"\
-end\
-local TEMPLATE_LAYOUT_LUA\
-TEMPLATE_LAYOUT_LUA = function(code)\
-  return \"return function (self, env, style) \" .. tostring(code) .. \" end\"\
-end\
-local ComponentRender\
-ComponentRender = function(hash, layout, script, style)\
-  return {\
-    hash = hash,\
-    layout = layout,\
-    script = script,\
-    style = style\
-  }\
-end\
-local IncludedAsset\
-IncludedAsset = function(path, type)\
-  return {\
-    name = basename(path),\
-    path = path,\
-    type = type\
-  }\
-end\
 local LoadedComponent\
 LoadedComponent = function(hash, layout, script, style)\
   return {\
@@ -3855,21 +3263,13 @@ LoadedComponent = function(hash, layout, script, style)\
     style = style\
   }\
 end\
-local merge\
-merge = function(target, source)\
-  for key, value in pairs(source) do\
-    if type(target[key]) == \"table\" and type(value) == \"table\" then\
-      merge(target[key], value)\
-    elseif target[key] == nil then\
-      target[key] = value\
-    end\
-  end\
-  return target\
-end\
 do\
   local _with_0 = Object:extend()\
   _with_0.cache = nil\
   _with_0.configuration = nil\
+  _with_0.includedAssets = nil\
+  _with_0.layoutEnvironment = nil\
+  _with_0.scriptEnvironment = nil\
   _with_0.vfs = nil\
   _with_0.initialize = function(self, directory, configuration)\
     if configuration == nil then\
@@ -3881,107 +3281,207 @@ do\
     if not (type(configuration) == \"table\") then\
       error(\"bad argument #2 to 'initialize' (expected table)\")\
     end\
-    local config, err = ThemeConfig:transform(configuration)\
-    if err then\
-      error(\"bad argument #2 to 'initialize' (malformed theme config)\\n\" .. tostring(err))\
-    end\
     self.vfs = VirtualFileSystem:new()\
     self.vfs:mount(\"theme\", FileSystemAdapter:new(directory))\
     if isfileSync(self.vfs, \"theme://theme.mprop\") then\
       local contents = self.vfs:readFileSync(\"theme://theme.mprop\")\
-      config = decode(contents, {\
+      local config = decode(contents, {\
         propertiesEncoder = \"moonscript\"\
       })\
-      config, err = ThemeConfig:transform(config)\
-      if err then\
-        error(\"bad dispatch to 'initialize' (malformed theme config)\\n\" .. tostring(err))\
+      if config then\
+        configuration = merge(configuration, config)\
       end\
-      configuration = merge(configuration, config)\
     end\
     self.cache = { }\
-    self.configuration = configuration\
+    local err\
+    self.configuration, err = ThemeConfig:transform(configuration)\
+    if err then\
+      return error(\"bad dispatch to 'initialize' (malformed theme config)\\n\" .. tostring(err))\
+    end\
   end\
   _with_0.getIncludedAssets = function(self)\
-    local assets = { }\
-    local root = self.vfs.adapters[\"theme\"].root\
-    local _list_0 = self.configuration.assets\
-    for _index_0 = 1, #_list_0 do\
-      local asset = _list_0[_index_0]\
-      if not (isfileSync(self.vfs, \"theme://assets/\" .. tostring(asset))) then\
-        error(\"bad dispatch to 'getIncludedAssets' (missing '\" .. tostring(asset) .. \"')\")\
+    if not (self.includedAssets) then\
+      self.includedAssets = { }\
+      local _list_0 = self.configuration.assets\
+      for _index_0 = 1, #_list_0 do\
+        local asset = _list_0[_index_0]\
+        if not (isfileSync(self.vfs, \"theme://assets/\" .. tostring(asset))) then\
+          error(\"bad dispatch to 'getIncludedAssets' (missing '\" .. tostring(asset) .. \"')\")\
+        end\
+        insert(self.includedAssets, {\
+          contents = self.vfs:readFileSync(\"theme://assets/\" .. tostring(asset)),\
+          name = asset\
+        })\
       end\
-      local assetType = MAP_ASSET_TYPES[extname(asset)]\
-      if not (assetType) then\
-        error(\"bad dispatch to 'getIncludedAssets' (unrecognized extension '\" .. tostring(extname(asset)) .. \"'\")\
-      end\
-      insert(assets, IncludedAsset(join(root, \"assets\", asset), assetType))\
     end\
-    return assets\
+    return self.includedAssets\
+  end\
+  _with_0.getComputedStyle = function(self, format, environment)\
+    local computed = { }\
+    local _list_0 = self.vfs:readdirSync(\"theme://components\")\
+    for _index_0 = 1, #_list_0 do\
+      local file = _list_0[_index_0]\
+      local component = self:loadComponent(basename(file, extname(file)))\
+      if component.style then\
+        insert(computed, component.style(format, environment))\
+      end\
+    end\
+    return concat(computed, \"\\n\")\
   end\
   _with_0.loadComponent = function(self, name)\
-    if not (isfileSync(self.vfs, \"theme://components/\" .. tostring(name) .. \"/layout.moon\")) then\
+    local file = \"theme://components/\" .. tostring(name) .. \".moon\"\
+    if not (isfileSync(self.vfs, file)) then\
       error(\"bad argument #1 to 'loadComponent' (missing component)\")\
     end\
     if not (self.cache[name]) then\
       local hash = createHash(name, \"SHA1\")\
-      local script\
-      if isfileSync(self.vfs, \"theme://components/\" .. tostring(name) .. \"/script.js\") then\
-        script = self:loadScript(\"theme://components/\" .. tostring(name) .. \"/script.js\")\
+      local contents = self.vfs:readFileSync(file)\
+      local component, err = moonscript.loadstring(contents, file)\
+      if not (component) then\
+        error(\"bad argument #1 to 'loadComponent' (failed to parse)\\n\" .. tostring(err))\
       end\
-      local stylesheet\
-      if isfileSync(self.vfs, \"theme://components/\" .. tostring(name) .. \"/style.mprop\") then\
-        stylesheet = self:loadStyle(\"theme://components/\" .. tostring(name) .. \"/style.mprop\", hash)\
+      local environment = self:makeComponentEnvironment(hash)\
+      setfenv(component, environment)\
+      local success\
+      success, err = pcall(component)\
+      if not (success) then\
+        error(\"bad argument #1 to 'loadComponent' (failed to dispatch)\\n\" .. tostring(err))\
       end\
-      local layout\
-      if isfileSync(self.vfs, \"theme://components/\" .. tostring(name) .. \"/layout.moon\") then\
-        layout = self:loadLayout(\"theme://components/\" .. tostring(name) .. \"/layout.moon\", stylesheet and stylesheet.classes)\
+      if not (environment.layout) then\
+        error(\"bad argument #1 to 'loadComponent' (component is missing layout)\")\
       end\
-      self.cache[name] = LoadedComponent(hash, layout, script, stylesheet and stylesheet.contents)\
+      self.cache[name] = LoadedComponent(hash, environment.layout, environment.script, environment.style)\
     end\
     return self.cache[name]\
   end\
-  _with_0.loadLayout = function(self, file, stylesheet)\
-    local contents = self.vfs:readFileSync(file)\
-    local code, err = moonscript.to_lua(contents)\
-    if not (code) then\
-      error(\"bad argument #1 to 'loadLayout' (failed to parse '\" .. tostring(file) .. \"')\\n\" .. tostring(err))\
-    end\
-    code = TEMPLATE_LAYOUT_LUA(code)\
-    local chunk\
-    chunk, err = loadstring(code, file)\
-    if err then\
-      error(\"bad argument #1 to 'loadLayout' (failed to load '\" .. tostring(file) .. \"')\\n\" .. tostring(err))\
-    end\
-    local layout = Layout(chunk, self.configuration.environment, stylesheet)\
-    return layout\
+  _with_0.makeComponentEnvironment = function(self, hash)\
+    local environment\
+    environment = {\
+      include = function(name)\
+        return self:loadComponent(name).layout\
+      end,\
+      Layout = function(chunk)\
+        if environment.layout then\
+          error(\"bad dispatch to 'Layout' (layout already set)\")\
+        end\
+        environment.layout = function(...)\
+          return layoutViz.parse(chunk, hash, self.layoutEnvironment, self.configuration.environment, ...)\
+        end\
+      end,\
+      Style = function(chunk)\
+        if environment.style then\
+          error(\"bad dispatch to 'Style' (style already set)\")\
+        end\
+        environment.style = function(format, styleEnv, ...)\
+          local syntaxtree = styleViz.parse(chunk, hash, styleEnv, self.configuration.environment, ...)\
+          return styleViz.compile(syntaxtree, format)\
+        end\
+      end\
+    }\
+    return environment\
   end\
-  _with_0.loadScript = function(self, file)\
-    local contents = self.vfs:readFileSync(file)\
-    return contents\
-  end\
-  _with_0.loadStyle = function(self, file, hash)\
-    local contents = self.vfs:readFileSync(file)\
-    local chunk, err = moonscript.loadstring(TEMPLATE_STYLESHEET_MOONSCRIPT(contents), file)\
-    if err then\
-      error(\"bad argument #1 to 'loadStyle' (failed to load '\" .. tostring(file) .. \"')\\n\" .. tostring(err))\
+  _with_0.render = function(self, name, format, environment, state)\
+    if environment == nil then\
+      environment = { }\
     end\
-    return Stylesheet(hash, chunk, self.configuration.environment)\
-  end\
-  _with_0.render = function(self, name, state)\
     if state == nil then\
       state = { }\
     end\
+    environment = { }\
     if not (type(name) == \"string\") then\
       error(\"bad argument #1 to 'parseComponent' (expected string)\")\
     end\
-    if not (type(state) == \"table\") then\
-      error(\"bad argument #2 to 'parseComponent' (expected table)\")\
+    if not (type(format) == \"boolean\") then\
+      error(\"bad argument #2 to 'parseComponent' (expected boolean)\")\
     end\
+    if not (type(environment) == \"table\") then\
+      error(\"bad argument #3 to 'parseComponent' (expected table)\")\
+    end\
+    if not (type(state) == \"table\") then\
+      error(\"bad argument #4 to 'parseComponent' (expected table)\")\
+    end\
+    self.layoutEnvironment = environment\
     local component = self:loadComponent(name)\
-    local contents = component.layout(state)\
-    return ComponentRender(component.hash, contents, component.script, component.style)\
+    local syntaxtree = component.layout(state)\
+    return layoutViz.compile(syntaxtree, format)\
   end\
   Theme = _with_0\
+end",
+['novacbn/lunarbook/api/Transformers'] = "local type\
+type = _G.type\
+local lower\
+lower = string.lower\
+local insert\
+insert = table.insert\
+local Object\
+Object = require(\"core\").Object\
+local endswith\
+endswith = dependency(\"novacbn/lunarbook/lib/utilities/string\").endswith\
+local pass\
+pass = function(...)\
+  return ...\
+end\
+local RegisteredTransformer\
+RegisteredTransformer = function(ext, transform, post)\
+  return {\
+    ext = ext,\
+    post = post,\
+    transform = transform\
+  }\
+end\
+do\
+  local _with_0 = Object:extend()\
+  _with_0.fragmentTransformers = nil\
+  _with_0.initialize = function(self)\
+    self.fragmentTransformers = { }\
+  end\
+  _with_0.registerFragment = function(self, ext, transform, post)\
+    if post == nil then\
+      post = pass\
+    end\
+    if not (type(ext) == \"string\") then\
+      error(\"bad argument #1 to 'registerFragment' (expected string)\")\
+    end\
+    if not (type(transform) == \"function\") then\
+      error(\"bad argument #2 to 'registerFragment' (expected function)\")\
+    end\
+    if not (type(post) == \"function\") then\
+      error(\"bad argument #3 to 'registerFragment' (expected function)\")\
+    end\
+    ext = lower(ext)\
+    if self.fragmentTransformers[ext] then\
+      error(\"bad argument #1 to 'registerFragment' (pre-existing transformer)\")\
+    end\
+    return insert(self.fragmentTransformers, RegisteredTransformer(ext, transform, post))\
+  end\
+  _with_0.processFragment = function(self, file, inDev, contents)\
+    if not (type(file) == \"string\") then\
+      error(\"bad argument #1 to 'processFragment' (expected string)\")\
+    end\
+    if not (type(inDev) == \"boolean\") then\
+      error(\"bad argument #2 to 'processFragment' (expected boolean)\")\
+    end\
+    if not (type(contents) == \"string\") then\
+      error(\"bad argument #3 to 'processFragment' (expected string)\")\
+    end\
+    local selectedTransformer\
+    file = lower(file)\
+    local _list_0 = self.fragmentTransformers\
+    for _index_0 = 1, #_list_0 do\
+      local transformer = _list_0[_index_0]\
+      if endswith(file, transformer.ext) then\
+        selectedTransformer = transformer\
+        break\
+      end\
+    end\
+    if not (selectedTransformer) then\
+      error(\"bad argument #1 to 'processFragment' (unexpected extension)\")\
+    end\
+    contents = selectedTransformer.transform(inDev, contents)\
+    contents = selectedTransformer.post(inDev, contents)\
+    return contents\
+  end\
+  Transformers = _with_0\
 end",
 ['novacbn/lunarbook/commands/export'] = "local mkdirSync\
 mkdirSync = require(\"fs\").mkdirSync\
@@ -4085,6 +3585,7 @@ do\
   _with_0.data = join(_with_0.home, \".lunarbook\")\
   _with_0.assets = join(_with_0.data, \"assets\")\
   _with_0.theme = join(_with_0.data, \"theme\")\
+  _with_0.plugins = join(_with_0.data, \"plugins\")\
   _with_0.configuration = join(_with_0.data, \"configuration.mprop\")\
   BOOK_HOME = _with_0\
 end\
@@ -4096,102 +3597,6 @@ do\
   _with_0.scripts = _with_0.assets .. \"/scripts\"\
   _with_0.styles = _with_0.assets .. \"/styles\"\
   BUILD_DIRS = _with_0\
-end",
-['novacbn/lunarbook/lib/stylesheet'] = "local pairs\
-pairs = _G.pairs\
-local gsub, lower, sub\
-do\
-  local _obj_0 = string\
-  gsub, lower, sub = _obj_0.gsub, _obj_0.lower, _obj_0.sub\
-end\
-local concat\
-concat = table.concat\
-local dashcase\
-dashcase = dependency(\"novacbn/lunarbook/lib/utilities/string\").dashcase\
-local TABLE_STATE_REPLACEMENTS = {\
-  normal = \"\"\
-}\
-encode = function(data)\
-  local buffer = { }\
-  local index = 0\
-  local append\
-  append = function(value)\
-    index = index + 1\
-    buffer[index] = value\
-  end\
-  for name, states in pairs(data) do\
-    name = dashcase(name)\
-    for state, rules in pairs(states) do\
-      state = lower(state)\
-      state = TABLE_STATE_REPLACEMENTS[state] or state\
-      if #state > 0 then\
-        if sub(state, 1, 1) == \"[\" then\
-          append(\".\" .. name .. state .. \"{\")\
-        else\
-          append(\".\" .. name .. \":\" .. state .. \"{\")\
-        end\
-      else\
-        append(\".\" .. name .. \"{\")\
-      end\
-      for rule, value in pairs(rules) do\
-        append(dashcase(rule) .. \":\" .. value .. \";\")\
-      end\
-      append(\"}\")\
-    end\
-  end\
-  return concat(buffer, \"\")\
-end",
-['novacbn/lunarbook/lib/stylesheet/color'] = "local type\
-type = _G.type\
-local new\
-new = dependency(\"luapower/color/exports\").new\
-alpha = function(value, alpha)\
-  if not (type(value) == \"string\" or type(value) == \"table\") then\
-    error(\"bad argument #1 to 'alpha' (expected string)\")\
-  end\
-  if not (type(alpha) == \"number\") then\
-    error(\"bad argument #2 to 'alpha' (expected number)\")\
-  end\
-  local r, g, b = new(value):rgb()\
-  r, g, b = r * 255, g * 255, b * 255\
-  local color = new(\"rgb\", r, g, b, alpha)\
-  return color:format(\"#rrggbbaa\")\
-end\
-darken = function(value, delta)\
-  if not (type(value) == \"string\" or type(value) == \"table\") then\
-    error(\"bad argument #1 to 'darken' (expected string)\")\
-  end\
-  if not (type(delta) == \"number\") then\
-    error(\"bad argument #2 to 'darken' (expected number)\")\
-  end\
-  local color = new(value)\
-  return color:shade(delta):format(\"#rrggbb\")\
-end\
-desaturate = function(value, delta)\
-  if not (type(value) == \"string\" or type(value) == \"table\") then\
-    error(\"bad argument #1 to 'desaturate' (expected string)\")\
-  end\
-  if not (type(delta) == \"number\") then\
-    error(\"bad argument #2 to 'desaturate' (expected number)\")\
-  end\
-  local color = new(value)\
-  return color:desaturate_by(delta):format(\"#rrggbb\")\
-end\
-lighten = function(value, delta)\
-  if not (type(value) == \"string\" or type(value) == \"table\") then\
-    error(\"bad argument #1 to 'lighten' (expected string)\")\
-  end\
-  if not (type(delta) == \"number\") then\
-    error(\"bad argument #2 to 'lighten' (expected number)\")\
-  end\
-  local color = new(value)\
-  return color:tint(delta):format(\"#rrggbb\")\
-end\
-toHex = function(value)\
-  if not (type(value) == \"string\" or type(value) == \"table\") then\
-    error(\"bad argument #1 to 'toHex' (expected string)\")\
-  end\
-  return new(value):format(\"#rrggbb\")\
 end",
 ['novacbn/lunarbook/lib/utilities'] = "local parse\
 parse = dependency(\"msva/htmlparser/exports\").parse\
@@ -4236,10 +3641,10 @@ extractSections = function(value)\
     titleSpotted = #elements > 0\
   end\
 end",
-['novacbn/lunarbook/lib/utilities/string'] = "local lower, gsub, sub\
+['novacbn/lunarbook/lib/utilities/string'] = "local gsub, lower, sub\
 do\
   local _obj_0 = string\
-  lower, gsub, sub = _obj_0.lower, _obj_0.gsub, _obj_0.sub\
+  gsub, lower, sub = _obj_0.gsub, _obj_0.lower, _obj_0.sub\
 end\
 dashcase = function(value)\
   return gsub(value, \"%u\", function(self)\
@@ -4262,6 +3667,21 @@ slugify = function(value)\
   value = gsubwhile(value, \"%-%-\", \"-\")\
   value = gsub(value, \"^%-*(.-)%-*$\", \"%1\")\
   return lower(value)\
+end",
+['novacbn/lunarbook/lib/utilities/table'] = "local pairs, type\
+do\
+  local _obj_0 = _G\
+  pairs, type = _obj_0.pairs, _obj_0.type\
+end\
+merge = function(target, source)\
+  for key, value in pairs(source) do\
+    if type(target[key]) == \"table\" and type(value) == \"table\" then\
+      merge(target[key], value)\
+    elseif target[key] == nil then\
+      target[key] = value\
+    end\
+  end\
+  return target\
 end",
 ['novacbn/lunarbook/lib/utilities/vfs'] = "local type, select\
 do\
@@ -4363,16 +3783,517 @@ return commandOps:exec((function()\
   end\
   return _accum_0\
 end)())",
+['novacbn/lunarbook/schemas/LunarConfig'] = "local types\
+types = dependency(\"leafo/tableshape/exports\").types\
+local ThemeConfig\
+ThemeConfig = dependency(\"novacbn/lunarbook/schemas/ThemeConfig\").ThemeConfig\
+LunarConfig = types.shape({\
+  theme = types.any + types[\"nil\"] / { },\
+  plugins = types.map_of(types.string, types.any) + types[\"nil\"] / { }\
+})",
 ['novacbn/lunarbook/schemas/ThemeConfig'] = "local types\
 types = dependency(\"leafo/tableshape/exports\").types\
 ThemeConfig = types.shape({\
   assets = types.array_of(types.string) + types[\"nil\"] / { },\
-  environment = types.map_of(types.any, types.any) + types[\"nil\"] / { },\
-  omnibar = types.array_of(types.shape({\
-    link = types.string,\
-    text = types.string\
-  })) + types[\"nil\"] / { }\
+  environment = types.shape({\
+    basePath = types.string + types[\"nil\"] / \"/\",\
+    omnibar = types.array_of(types.shape({\
+      link = types.string,\
+      text = types.string\
+    })) + types[\"nil\"] / { },\
+    title = types.string + types[\"nil\"] / \"LunarBook\",\
+    scriptPath = types.string + types[\"nil\"] / \"assets/scripts/lunarbook.components.js\",\
+    stylePath = types.string + types[\"nil\"] / \"assets/styles/lunarbook.components.css\"\
+  }, {\
+    extra_fields = types.map_of(types.any, types.any)\
+  })\
 })",
+['novacbn/lunarviz/constants'] = "local makeTruthyMap\
+makeTruthyMap = dependency(\"novacbn/lunarviz/utilities\").makeTruthyMap\
+SELECTOR_PSEUDO_CLASSES = makeTruthyMap({\
+  \"active\",\
+  \"checked\",\
+  \"default\",\
+  \"defined\",\
+  \"disabled\",\
+  \"empty\",\
+  \"enabled\",\
+  \"first\",\
+  \"first-child\",\
+  \"first-of-type\",\
+  \"focus\",\
+  \"focus-within\",\
+  \"host\",\
+  \"hover\",\
+  \"indeterminate\",\
+  \"in-range\",\
+  \"invalid\",\
+  \"last-child\",\
+  \"last-of-type\",\
+  \"left\",\
+  \"link\",\
+  \"only-child\",\
+  \"only-of-type\",\
+  \"optional\",\
+  \"out-of-range\",\
+  \"read-only\",\
+  \"read-write\",\
+  \"required\",\
+  \"right\",\
+  \"scope\",\
+  \"target\",\
+  \"valid\",\
+  \"visited\"\
+})\
+SELECTOR_PSEUDO_ELEMENTS = makeTruthyMap({\
+  \"after\",\
+  \"backdrop\",\
+  \"before\",\
+  \"cue\",\
+  \"first-letter\",\
+  \"first-line\"\
+})\
+ELEMENT_VOID_TAGS = makeTruthyMap({\
+  \"area\",\
+  \"base\",\
+  \"br\",\
+  \"col\",\
+  \"command\",\
+  \"embed\",\
+  \"hr\",\
+  \"img\",\
+  \"input\",\
+  \"keygen\",\
+  \"link\",\
+  \"meta\",\
+  \"param\",\
+  \"source\",\
+  \"track\",\
+  \"wbr\"\
+})",
+['novacbn/lunarviz/layout'] = "local pairs, type\
+do\
+  local _obj_0 = _G\
+  pairs, type = _obj_0.pairs, _obj_0.type\
+end\
+local rep\
+rep = string.rep\
+local concat, insert\
+do\
+  local _obj_0 = table\
+  concat, insert = _obj_0.concat, _obj_0.insert\
+end\
+local ELEMENT_VOID_TAGS\
+ELEMENT_VOID_TAGS = dependency(\"novacbn/lunarviz/constants\").ELEMENT_VOID_TAGS\
+local dashcase, filter\
+do\
+  local _obj_0 = dependency(\"novacbn/lunarviz/utilities\")\
+  dashcase, filter = _obj_0.dashcase, _obj_0.filter\
+end\
+local ASTRoot\
+ASTRoot = function(name, nodes)\
+  if nodes == nil then\
+    nodes = { }\
+  end\
+  return {\
+    name = name,\
+    isRoot = true,\
+    nodes = nodes\
+  }\
+end\
+local ASTAttribute\
+ASTAttribute = function(name, value)\
+  return {\
+    name = name,\
+    value = value\
+  }\
+end\
+local ASTElementNode\
+ASTElementNode = function(tag, attributes, children, isVoidTag)\
+  if attributes == nil then\
+    attributes = { }\
+  end\
+  if children == nil then\
+    children = { }\
+  end\
+  if isVoidTag == nil then\
+    isVoidTag = false\
+  end\
+  return {\
+    attributes = attributes,\
+    isVoidTag = isVoidTag,\
+    nodes = children,\
+    tag = tag\
+  }\
+end\
+local ASTTextNode\
+ASTTextNode = function(text)\
+  return {\
+    isTextNode = true,\
+    text = text\
+  }\
+end\
+local ChunkMeta = {\
+  __index = function(self, tag)\
+    if tag == \"raw\" then\
+      return function(value)\
+        return insert(self.__nodes, ASTTextNode(value))\
+      end\
+    end\
+    tag = dashcase(tag)\
+    local astnode = ASTElementNode(tag, nil, nil, ELEMENT_VOID_TAGS[tag] or false)\
+    local parentNodes = self.__nodes\
+    insert(parentNodes, astnode)\
+    return function(attributes, value)\
+      if type(attributes) == \"function\" or type(attributes) == \"string\" then\
+        value = attributes\
+        attributes = nil\
+      end\
+      if attributes then\
+        for key, avalue in pairs(attributes) do\
+          if not (type(key) == \"string\") then\
+            error(\"malformed attribute name '\" .. tostring(key) .. \"'\")\
+          end\
+          if not (type(avalue) == \"string\" or type(avalue) == \"boolean\") then\
+            error(\"malformed attribute value for '\" .. tostring(key) .. \"'\")\
+          end\
+          key = dashcase(key)\
+          insert(astnode.attributes, ASTAttribute(key, avalue))\
+        end\
+      end\
+      if type(value) == \"string\" then\
+        return insert(astnode.nodes, ASTTextNode(value))\
+      elseif type(value) == \"function\" then\
+        self.__nodes = astnode.nodes\
+        value()\
+        self.__nodes = parentNodes\
+      end\
+    end\
+  end\
+}\
+local filterText\
+filterText = function(value)\
+  return value.isTextNode == nil\
+end\
+compile = function(syntaxtree, format)\
+  if format == nil then\
+    format = false\
+  end\
+  if not (type(syntaxtree) == \"table\") then\
+    error(\"bad argument #1 to 'compile' (expected ASTRoot)\")\
+  end\
+  if not (type(format) == \"boolean\") then\
+    error(\"bad argument #2 to 'compile' (expected boolean)\")\
+  end\
+  local buffer = { }\
+  local index = 0\
+  local append\
+  append = function(value, next, ...)\
+    index = index + 1\
+    buffer[index] = value\
+    if next then\
+      return append(next, ...)\
+    end\
+  end\
+  local traverse\
+  traverse = function(parent, name, level)\
+    local _list_0 = parent.nodes\
+    for _index_0 = 1, #_list_0 do\
+      local _continue_0 = false\
+      repeat\
+        local node = _list_0[_index_0]\
+        if node.isTextNode then\
+          append(node.text)\
+          _continue_0 = true\
+          break\
+        end\
+        if node.isRoot then\
+          traverse(node, node.name, level)\
+          _continue_0 = true\
+          break\
+        end\
+        if format then\
+          append(rep(\"\\t\", level))\
+        end\
+        append(\"<\", node.tag)\
+        local _list_1 = node.attributes\
+        for _index_1 = 1, #_list_1 do\
+          local _continue_1 = false\
+          repeat\
+            local attribute = _list_1[_index_1]\
+            if type(attribute.value) == \"boolean\" and attribute.value then\
+              append(attribute.name)\
+              _continue_1 = true\
+              break\
+            end\
+            append(\" \", attribute.name, \"='\", attribute.value, \"'\")\
+            _continue_1 = true\
+          until true\
+          if not _continue_1 then\
+            break\
+          end\
+        end\
+        append(\" data-layout='\", name, \"'\", parent.isRoot and \" data-root\")\
+        if node.isVoidTag then\
+          append(\" />\", format and \"\\n\")\
+          _continue_0 = true\
+          break\
+        end\
+        append(\">\", format and #filter(node.nodes, filterText) > 0 and \"\\n\")\
+        traverse(node, name, format and level + 1)\
+        if format and #filter(node.nodes, filterText) > 0 then\
+          append(rep(\"\\t\", level))\
+        end\
+        append(\"</\", node.tag, \">\", format and \"\\n\")\
+        _continue_0 = true\
+      until true\
+      if not _continue_0 then\
+        break\
+      end\
+    end\
+  end\
+  traverse(syntaxtree, syntaxtree.name, 0)\
+  return concat(buffer, \"\")\
+end\
+parse = function(chunk, name, chunkenv, ...)\
+  if chunkenv == nil then\
+    chunkenv = { }\
+  end\
+  if not (type(chunk) == \"function\") then\
+    error(\"bad argument #1 to 'parse' (expected function)\")\
+  end\
+  if not (type(name) == \"string\") then\
+    error(\"bad argument #2 to 'parse' (expected string)\")\
+  end\
+  if not (type(chunkenv) == \"table\") then\
+    error(\"bad argument #3 to 'parse' (expected table)\")\
+  end\
+  local parentNodes = chunkenv.__nodes\
+  name = dashcase(name)\
+  local syntaxtree = ASTRoot(name)\
+  if parentNodes then\
+    insert(parentNodes, syntaxtree)\
+  end\
+  chunkenv.__nodes = syntaxtree.nodes\
+  setmetatable(chunkenv, ChunkMeta)\
+  setfenv(chunk, chunkenv)\
+  chunk(...)\
+  if parentNodes then\
+    chunkenv.__nodes = parentNodes\
+  else\
+    return syntaxtree\
+  end\
+end",
+['novacbn/lunarviz/style'] = "local getmetatable, ipairs, pairs, setfenv, setmetatable, type\
+do\
+  local _obj_0 = _G\
+  getmetatable, ipairs, pairs, setfenv, setmetatable, type = _obj_0.getmetatable, _obj_0.ipairs, _obj_0.pairs, _obj_0.setfenv, _obj_0.setmetatable, _obj_0.type\
+end\
+local concat, insert, sort\
+do\
+  local _obj_0 = table\
+  concat, insert, sort = _obj_0.concat, _obj_0.insert, _obj_0.sort\
+end\
+local SELECTOR_PSEUDO_CLASSES, SELECTOR_PSEUDO_ELEMENTS\
+do\
+  local _obj_0 = dependency(\"novacbn/lunarviz/constants\")\
+  SELECTOR_PSEUDO_CLASSES, SELECTOR_PSEUDO_ELEMENTS = _obj_0.SELECTOR_PSEUDO_CLASSES, _obj_0.SELECTOR_PSEUDO_ELEMENTS\
+end\
+local dashcase\
+dashcase = dependency(\"novacbn/lunarviz/utilities\").dashcase\
+local ASTRoot\
+ASTRoot = function(name)\
+  return {\
+    name = name,\
+    rules = { }\
+  }\
+end\
+local ASTProperty\
+ASTProperty = function(name, value)\
+  return {\
+    name = name,\
+    value = value\
+  }\
+end\
+local ASTRule\
+ASTRule = function(target, modifiers, parents, properties)\
+  if modifiers == nil then\
+    modifiers = { }\
+  end\
+  if parents == nil then\
+    parents = { }\
+  end\
+  if properties == nil then\
+    properties = { }\
+  end\
+  return {\
+    modifiers = modifiers,\
+    parents = parents,\
+    properties = properties,\
+    target = target\
+  }\
+end\
+local sortProperties\
+sortProperties = function(a, b)\
+  return a.name < b.name\
+end\
+local RuleMeta\
+RuleMeta = {\
+  __call = function(self, properties)\
+    if not (type(properties) == \"table\" and getmetatable(properties) == nil) then\
+      error(\"malformed properties table\")\
+    end\
+    local sorted = { }\
+    for key, value in pairs(properties) do\
+      if not (type(key) == \"string\") then\
+        error(\"malformed properties key '\" .. tostring(key) .. \"'\")\
+      end\
+      if not (type(value) == \"string\" or type(value) == \"number\") then\
+        error(\"malformed properties value '\" .. tostring(key) .. \"'\")\
+      end\
+      key = dashcase(key)\
+      insert(sorted, ASTProperty(key, value))\
+    end\
+    sort(sorted, sortProperties)\
+    self.__ast.properties = sorted\
+    insert(self.__parent, self.__ast)\
+    return self\
+  end,\
+  __index = function(self, key)\
+    if not (type(key) == \"string\") then\
+      error(\"malformed modifier key '\" .. tostring(key) .. \"'\")\
+    end\
+    key = dashcase(key)\
+    local ast = self.__ast\
+    if SELECTOR_PSEUDO_CLASSES[key] then\
+      insert(ast.modifiers, \":\" .. key)\
+    elseif SELECTOR_PSEUDO_ELEMENTS[key] then\
+      insert(ast.modifiers, \"::\" .. key)\
+    else\
+      insert(ast.modifiers, \".\" .. key)\
+    end\
+    return self\
+  end,\
+  __mul = function(self, rule)\
+    if not (type(rule) == \"table\" and getmetatable(rule) == RuleMeta) then\
+      error(\"malformed rule modifier\")\
+    end\
+    local modifier = \" \" .. rule.__ast.target .. concat(rule.__ast.modifiers, \"\")\
+    rule.__ast.target = self.__ast.target\
+    rule.__ast.modifiers = self.__ast.modifiers\
+    insert(rule.__ast.modifiers, modifier)\
+    return rule\
+  end\
+}\
+compile = function(syntaxtree, format)\
+  if format == nil then\
+    format = false\
+  end\
+  if not (type(syntaxtree) == \"table\") then\
+    error(\"bad argument #1 to 'compile' (expected ASTRoot)\")\
+  end\
+  if not (type(format) == \"boolean\") then\
+    error(\"bad argument #2 to 'compile' (expected boolean)\")\
+  end\
+  local buffer = { }\
+  local index = 0\
+  local append\
+  append = function(value, next, ...)\
+    index = index + 1\
+    buffer[index] = value\
+    if next then\
+      return append(next, ...)\
+    end\
+  end\
+  local _list_0 = syntaxtree.rules\
+  for _index_0 = 1, #_list_0 do\
+    local rule = _list_0[_index_0]\
+    if rule.target == \"root\" then\
+      append(\"*[data-root]\")\
+    else\
+      append(rule.target)\
+    end\
+    append(\"[data-layout='\", syntaxtree.name, \"']\")\
+    local _list_1 = rule.modifiers\
+    for _index_1 = 1, #_list_1 do\
+      local modifier = _list_1[_index_1]\
+      append(modifier)\
+    end\
+    if format then\
+      append(\" \")\
+    end\
+    append(\"{\")\
+    local _list_2 = rule.properties\
+    for _index_1 = 1, #_list_2 do\
+      local property = _list_2[_index_1]\
+      if format then\
+        append(\"\\n\\t\")\
+      end\
+      append(property.name, \": \", property.value, \";\")\
+    end\
+    append(\"\\n\", \"}\", \"\\n\")\
+  end\
+  return concat(buffer, \"\")\
+end\
+parse = function(chunk, name, chunkenv, ...)\
+  if chunkenv == nil then\
+    chunkenv = { }\
+  end\
+  if not (type(chunk) == \"function\") then\
+    error(\"bad argument #1 to 'parse' (expected function)\")\
+  end\
+  if not (type(name) == \"string\") then\
+    error(\"bad argument #2 to 'parse' (expected string)\")\
+  end\
+  if not (type(chunkenv) == \"table\") then\
+    error(\"bad argument #3 to 'parse' (expected table)\")\
+  end\
+  name = dashcase(name)\
+  local syntaxtree = ASTRoot(name)\
+  local environment = {\
+    __index = function(self, key)\
+      key = dashcase(key)\
+      return setmetatable({\
+        __ast = ASTRule(key),\
+        __parent = syntaxtree.rules\
+      }, RuleMeta)\
+    end\
+  }\
+  setmetatable(chunkenv, environment)\
+  setfenv(chunk, chunkenv)\
+  chunk(...)\
+  return syntaxtree\
+end",
+['novacbn/lunarviz/utilities'] = "local gsub, lower\
+do\
+  local _obj_0 = string\
+  gsub, lower = _obj_0.gsub, _obj_0.lower\
+end\
+dashcase = function(value)\
+  return gsub(value, \"%u\", function(self)\
+    return \"-\" .. lower(self)\
+  end)\
+end\
+makeTruthyMap = function(tbl)\
+  local _tbl_0 = { }\
+  for _index_0 = 1, #tbl do\
+    local value = tbl[_index_0]\
+    _tbl_0[value] = true\
+  end\
+  return _tbl_0\
+end\
+filter = function(tbl, predicate)\
+  local _accum_0 = { }\
+  local _len_0 = 1\
+  for _index_0 = 1, #tbl do\
+    local value = tbl[_index_0]\
+    if predicate(value) then\
+      _accum_0[_len_0] = value\
+      _len_0 = _len_0 + 1\
+    end\
+  end\
+  return _accum_0\
+end",
 ['novacbn/luvit-extras/adapters/FileSystemAdapter'] = "local type\
 type = _G.type\
 local gsub\
@@ -5347,86 +5268,4 @@ isArray = function(tbl)\
   end\
   return true\
 end",
-['sebcat/markdown/exports'] = "local lpeg = require \"lpeg\"\
-\
-local stringx = import \"novacbn/lunarbook/lib/utilities/string\"\
-\
-local R = lpeg.R\
-local P = lpeg.P\
-local V = lpeg.V\
-local S = lpeg.S\
-local C = lpeg.C\
-local Cc = lpeg.Cc\
-local Ct = lpeg.Ct\
-local Cmt = lpeg.Cmt\
-\
-local function markdown_grammar()\
-  local trim = function(str)\
-    res = str:gsub(\"^%s*(.-)%s*$\", \"%1\")\
-    return res\
-  end\
-\
-  local header_grammar = function(n)\
-    prefix = string.rep(\"#\",n)\
-    return P(prefix)*(((1-V\"NL\")^0)/function(str)\
-          return string.format(\"<h%d id='%s'>%s</h%d>\", n, stringx.slugify(trim(str)), trim(str), n)\
-        end) * (V\"NL\" + -1)\
-  end\
-\
-  local concat_anchor = function(s, i, text, href)\
-    return true, string.format(\"<a href=\\\"%s\\\">%s</a>\", href, text)\
-  end\
-\
-  local concat_matches = function(s, i, vals)\
-    return i, table.concat(vals)\
-  end\
-\
-  local line_attr = function(sym, tagname)\
-    return P(sym) * Cc(string.format(\"<%s>\", tagname)) *((1-P(sym))^1/trim) *\
-        Cc(string.format(\"</%s>\", tagname)) * P(sym)\
-  end\
-\
-  return P{\
-    \"markdown\";\
-    NL = (P\"\\r\"^-1 * P\"\\n\")+-1,\
-    WS = S\"\\t \",\
-    OPTWS = V\"WS\"^0,\
-    anchortext = (1-P\"]\")^0,\
-    anchorref = (1-P\")\")^0,\
-    anchor = Cmt(P\"[\" * C(V\"anchortext\") * P\"]\" *\
-        P\"(\" * C(V\"anchorref\") * P\")\", concat_anchor),\
-    line = Cmt(Ct((V\"anchor\" + line_attr(\"**\", \"strong\") + line_attr(\"*\", \"em\")\
-        + line_attr(\"`\", \"code\") + C((1-V\"NL\")))^1), concat_matches),\
-    lines = ((V\"line\")*V\"NL\")^1,\
-    paragraph = Cc\"<p>\" * V\"lines\" * V\"NL\" * Cc\"</p>\",\
-    ulli = P\"*\" * V\"OPTWS\" * Cc\"<li>\" * (((V\"line\")^-1)/trim) * Cc\"</li>\" *\
-        V\"NL\",\
-    ul = Cc\"<ul>\" * V\"ulli\"^1 * Cc\"</ul>\",\
-    olli = R\"09\"^1 * P\".\" * V\"OPTWS\" * Cc\"<li>\" * (((V\"line\")^-1)/trim) *\
-        Cc\"</li>\" * V\"NL\",\
-    ol = Cc\"<ol>\" * V\"olli\"^1 * Cc\"</ol>\",\
-    codeblock = P\"````\" * V\"NL\" * Cc\"<pre><code>\" * C((1-P\"````\")^0) *\
-        Cc\"</code></pre>\" * P\"````\",\
-    content = V\"ul\" + V\"ol\" + V\"codeblock\" + V\"paragraph\",\
-    h1 = header_grammar(1),\
-    h2 = header_grammar(2),\
-    h3 = header_grammar(3),\
-    h4 = header_grammar(4),\
-    h5 = header_grammar(5),\
-    h6 = header_grammar(6),\
-    header = V\"h6\" + V\"h5\" + V\"h4\" + V\"h3\" + V\"h2\" + V\"h1\",\
-    markdown = (S\"\\r\\n\\t \"^1 + V\"header\" + V\"content\")^0 * V\"NL\"\
-  }\
-end\
-\
-local parser = Ct(markdown_grammar())\
-exports.parse = function(str)\
-  local res = parser:match(str)\
-  if type(res) == \"table\" then\
-    return table.concat(res)\
-  end\
-end\
-\
-\
-",
 }, ...)

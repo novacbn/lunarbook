@@ -1,14 +1,12 @@
 assets: {
     -- Stylesheets
-    "stylesheets/animate.css", "stylesheets/normalize.css", "stylesheets/flexblocks.css", "stylesheets/skeleton.css"
+    "styles/animate.css", "styles/normalize.css", "styles/flexblocks.css", "styles/skeleton.css"
 
     -- Javascript
     "scripts/youarei.js"
 }
 
 environment:
-    title: "LunarBook"
-
     colors:
         aqua:       "#7FDBFF"
         black:      "#111111"

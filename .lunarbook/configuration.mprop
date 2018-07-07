@@ -1,8 +1,11 @@
 theme: {
     environment:
+        basePath: "/dist/"
+
         omnibar: {
-            {text: "Guide", link: "/guide"}
-            {text: "Configuration Reference", link: "/config"}
-            {text: "Theming", link: "/themes"}
+            {text: "Guide", link: "/lunarbook/guide"}
+            {text: "Configuration Reference", link: "/lunarbook/config"}
+            {text: "Theming", link: "/lunarbook/themes"}
+            {text: "GitHub", link: "https://github.com/novacbn/lunarbook"}
         }
 }

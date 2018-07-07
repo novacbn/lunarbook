@@ -1,83 +1,19 @@
-import loadstring, pairs, type from _G
-import insert from table
+import loadstring, pcall, setfenv, type from _G
+import concat, insert from table
 
 import Object from require "core"
 import basename, extname, join from require "path"
-import encode from require "json"
 import decode from "novacbn/properties/exports"
 import createHash from "novacbn/luvit-extras/crypto"
 import VirtualFileSystem from "novacbn/luvit-extras/vfs"
 import FileSystemAdapter from "novacbn/luvit-extras/adapters/FileSystemAdapter"
-moonscript = require "moonscript/base"
+layoutViz   = dependency "novacbn/lunarviz/layout"
+moonscript  = require "moonscript/base"
+styleViz    = dependency "novacbn/lunarviz/style"
 
-import Layout from "novacbn/lunarbook/api/Layout"
-import Stylesheet from "novacbn/lunarbook/api/Stylesheet"
-import BOOK_HOME from "novacbn/lunarbook/lib/constants"
+import merge from "novacbn/lunarbook/lib/utilities/table"
 import isfileSync from "novacbn/lunarbook/lib/utilities/vfs"
 import ThemeConfig from "novacbn/lunarbook/schemas/ThemeConfig"
-
--- ::MAP_ASSET_TYPES -> table
--- Represents the mapping of accepted asset extensions
---
-MAP_ASSET_TYPES = {
-    ".js":  "script"
-    ".css": "style"
-}
-
--- ::TEMPLATE_STYLESHEET_MOONSCRIPT(string code) -> string
--- Formats MoonScript code into a simplistic data format for styles
---
-TEMPLATE_STYLESHEET_MOONSCRIPT = (code) -> "return { #{code} }"
-
--- ::TEMPLATE_LAYOUT_LUA(string code) -> string
--- Formats Lua code into a simplistic DSL for layouts
---
-TEMPLATE_LAYOUT_LUA = (code) -> "return function (self, env, style) #{code} end"
-
--- ::ComponentRender(string hash, string layout, string script?, string style?) -> ComponentRender
--- Represents the rendered output of a component
---
-ComponentRender = (hash, layout, script, style) -> {
-    -- ComponentRender::hash -> string
-    -- Represents the hash of the component path
-    --
-    hash: hash
-
-    -- ComponentRender::layout -> string
-    -- Represents the rendered layout of the component
-    --
-    layout: layout
-
-    -- ComponentRender::script -> string
-    -- Represents the generated script of the component
-    --
-    script: script
-
-    -- ComponentRender::style -> string
-    -- Represents the generated style of the component
-    --
-    style:  style
-}
-
--- ::IncludedAsset(string path, string type) -> IncludedAsset
--- Represents an asset that was included by configuration
---
-IncludedAsset = (path, type) -> {
-    -- IncludedAsset::name -> string
-    -- Represents the name of the component
-    --
-    name: basename(path)
-
-    -- IncludedAsset::path -> string
-    -- Represents the path of the asset being included
-    --
-    path: path
-
-    -- IncludedAsset::type -> string
-    -- Represents the type of asset being included
-    --
-    type: type
-}
 
 -- ::LoadedComponent(string hash, function layout, string script?, string style?) -> LoadedComponent
 -- Represents a component already loaded into the theme cache
@@ -93,26 +29,16 @@ LoadedComponent = (hash, layout, script, style) -> {
     --
     layout: layout
 
-    -- LoadedComponent::script -> string
-    -- Represents the generated script of the component
+    -- LoadedComponent::script -> function?
+    -- Represents the script generator of the component
     --
     script: script
 
-    -- LoadedComponent::style -> string
-    -- Represents the generated style of the component
+    -- LoadedComponent::style -> function?
+    -- Represents the style generator of the component
     --
     style: style
 }
-
--- ::merge(table target, table source) -> table
--- Merges the source table with the target table
---
-merge = (target, source) ->
-    for key, value in pairs(source)
-        if type(target[key]) == "table" and type(value) == "table" then merge(target[key], value)
-        elseif target[key] == nil then target[key] = value
-
-    return target
 
 -- Theme::Theme()
 -- Represents a LunarBook theme
@@ -128,6 +54,21 @@ export Theme = with Object\extend()
     --
     .configuration = nil
 
+    -- Theme::includedAssets -> table
+    -- Represents the assets included for distribution by the theme
+    --
+    .includedAssets = nil
+
+    -- Theme::layoutEnvironment -> table
+    -- Represents the current environment for layouts
+    --
+    .layoutEnvironment = nil
+
+    -- Theme::scriptEnvironment -> table
+    -- Represents the current environment for scripts
+    --
+    .scriptEnvironment = nil
+
     -- Theme::vfs -> VirtualFileSystem
     -- Represents the virtual file system of the theme
     --
@@ -140,96 +81,103 @@ export Theme = with Object\extend()
         error("bad argument #1 to 'initialize' (expected string)") unless type(directory) == "string"
         error("bad argument #2 to 'initialize' (expected table)") unless type(configuration) == "table"
 
-        config, err = ThemeConfig\transform(configuration)
-        error("bad argument #2 to 'initialize' (malformed theme config)\n#{err}") if err
-
         @vfs = VirtualFileSystem\new()
         @vfs\mount("theme", FileSystemAdapter\new(directory))
 
         if isfileSync(@vfs, "theme://theme.mprop")
             contents        = @vfs\readFileSync("theme://theme.mprop")
             config          = decode(contents, propertiesEncoder: "moonscript")
+            configuration   = merge(configuration, config) if config
 
-            config, err = ThemeConfig\transform(config)
-            error("bad dispatch to 'initialize' (malformed theme config)\n#{err}") if err
-            configuration = merge(configuration, config)
-
-        @cache          = {}
-        @configuration  = configuration
+        @cache              = {}
+        @configuration, err = ThemeConfig\transform(configuration)
+        error("bad dispatch to 'initialize' (malformed theme config)\n#{err}") if err
 
     -- Theme::getIncludedAssets() -> table
     -- Returns the assets required by the theme
     --
     .getIncludedAssets = () =>
-        assets  = {}
-        root    = @vfs.adapters["theme"].root
+        unless @includedAssets
+            @includedAssets = {}
 
-        for asset in *@configuration.assets
-            error("bad dispatch to 'getIncludedAssets' (missing '#{asset}')") unless isfileSync(@vfs, "theme://assets/#{asset}")
+            for asset in *@configuration.assets
+                error("bad dispatch to 'getIncludedAssets' (missing '#{asset}')") unless isfileSync(@vfs, "theme://assets/#{asset}")
+                insert(@includedAssets, {contents: @vfs\readFileSync("theme://assets/#{asset}"), name: asset})
 
-            assetType = MAP_ASSET_TYPES[extname(asset)]
-            error("bad dispatch to 'getIncludedAssets' (unrecognized extension '#{extname(asset)}'") unless assetType
+        return @includedAssets
 
-            insert(assets, IncludedAsset(join(root, "assets", asset), assetType))
-    
-        return assets
+    -- Theme::getComputedStyle(boolean format?, table environment?) -> string
+    -- Returns the computed Stylesheet of all the components
+    --
+    .getComputedStyle = (format, environment) =>
+        computed = {}
+
+        for file in *@vfs\readdirSync("theme://components")
+            component = @loadComponent(basename(file, extname(file)))
+            insert(computed, component.style(format, environment)) if component.style
+
+        return concat(computed, "\n")
 
     -- Theme::loadComponent(string name) -> ComponentRender
-    --
+    -- Loads a component into the memory
     --
     .loadComponent = (name) =>
-        error("bad argument #1 to 'loadComponent' (missing component)") unless isfileSync(@vfs, "theme://components/#{name}/layout.moon")
+        file = "theme://components/#{name}.moon"
+        error("bad argument #1 to 'loadComponent' (missing component)") unless isfileSync(@vfs, file)
 
         unless @cache[name]
-            hash        = createHash(name, "SHA1")
-            script      = @loadScript("theme://components/#{name}/script.js") if isfileSync(@vfs, "theme://components/#{name}/script.js")
-            stylesheet  = @loadStyle("theme://components/#{name}/style.mprop", hash) if isfileSync(@vfs, "theme://components/#{name}/style.mprop")
-            layout      = @loadLayout("theme://components/#{name}/layout.moon", stylesheet and stylesheet.classes) if isfileSync(@vfs, "theme://components/#{name}/layout.moon")
+            hash            = createHash(name, "SHA1")
+            contents        = @vfs\readFileSync(file)
+            --script      = @loadScript("theme://components/#{name}/script.js") if isfileSync(@vfs, "theme://components/#{name}/script.js")
+            component, err  = moonscript.loadstring(contents, file)
+            error("bad argument #1 to 'loadComponent' (failed to parse)\n#{err}") unless component
 
-            @cache[name] = LoadedComponent(hash, layout, script, stylesheet and stylesheet.contents)
+            environment = @makeComponentEnvironment(hash)
+            setfenv(component, environment)
+            success, err = pcall(component)
+            error("bad argument #1 to 'loadComponent' (failed to dispatch)\n#{err}") unless success
+
+            error("bad argument #1 to 'loadComponent' (component is missing layout)") unless environment.layout
+            @cache[name] = LoadedComponent(hash, environment.layout, environment.script, environment.style)
 
         return @cache[name]
 
-    -- Theme::loadLayout(string file, table stylesheet?) -> function
-    -- Loads a layout into memory and returns a generator function
+    -- Theme::makeComponentEnvironment(string hash) -> table
+    -- Makes a fresh environment for a component
     --
-    .loadLayout = (file, stylesheet) =>
-        contents    = @vfs\readFileSync(file)
-        code, err   = moonscript.to_lua(contents)
-        error("bad argument #1 to 'loadLayout' (failed to parse '#{file}')\n#{err}") unless code
+    .makeComponentEnvironment = (hash) =>
+        local environment
+        environment = {
+            include: (name) ->
+                return @loadComponent(name).layout
 
-        code        = TEMPLATE_LAYOUT_LUA(code)
-        chunk, err  = loadstring(code, file)
-        error("bad argument #1 to 'loadLayout' (failed to load '#{file}')\n#{err}") if err
-        layout      = Layout(chunk, @configuration.environment, stylesheet)
+            Layout: (chunk) ->
+                error("bad dispatch to 'Layout' (layout already set)") if environment.layout
 
-        return layout
+                environment.layout = (...) ->
+                    return layoutViz.parse(chunk, hash, @layoutEnvironment, @configuration.environment, ...)
 
-    -- Theme::loadScript(string file) -> table
-    -- Loads a script into memory and injects theme environment variables
+            Style: (chunk) ->
+                error("bad dispatch to 'Style' (style already set)") if environment.style
+
+                environment.style = (format, styleEnv, ...) ->
+                    syntaxtree = styleViz.parse(chunk, hash, styleEnv, @configuration.environment, ...)
+                    return styleViz.compile(syntaxtree, format)
+        }
+
+        return environment
+
+    -- Theme::render(string name, boolean format, table environment, table state?) -> string
+    -- Renders the specified theme component with the given state
     --
-    .loadScript = (file) =>
-        -- TODO: environment injection
-        contents = @vfs\readFileSync(file)
-        return contents
-
-    -- Theme::loadStyle(string file, string hash) -> Stylesheet
-    -- Loads a style into memory and performs injection and encoding hash
-    --
-    .loadStyle = (file, hash) =>
-        contents    = @vfs\readFileSync(file)
-        chunk, err  = moonscript.loadstring(TEMPLATE_STYLESHEET_MOONSCRIPT(contents), file)
-        error("bad argument #1 to 'loadStyle' (failed to load '#{file}')\n#{err}") if err
-
-        return Stylesheet(hash, chunk, @configuration.environment)
-
-    -- Theme::render(string name, table state?) -> ComponentRender
-    -- Renders the specified theme with the given state
-    --
-    .render = (name, state={}) =>
+    .render = (name, format, environment={}, state={}) =>
+        environment = {}
         error("bad argument #1 to 'parseComponent' (expected string)") unless type(name) == "string"
-        error("bad argument #2 to 'parseComponent' (expected table)") unless type(state) == "table"
+        error("bad argument #2 to 'parseComponent' (expected boolean)") unless type(format) == "boolean"
+        error("bad argument #3 to 'parseComponent' (expected table)") unless type(environment) == "table"
+        error("bad argument #4 to 'parseComponent' (expected table)") unless type(state) == "table"
 
-        component   = @loadComponent(name)
-        contents    = component.layout(state)
-        return ComponentRender(component.hash, contents, component.script, component.style)
+        @layoutEnvironment  = environment
+        component           = @loadComponent(name)
+        syntaxtree          = component.layout(state)
+        return layoutViz.compile(syntaxtree, format)

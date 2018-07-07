@@ -12,11 +12,31 @@ export ThemeConfig = types.shape
     -- ThemeConfig::environment -> table
     -- Represents the environment available to theme assets during compilation
     --
-    environment: types.map_of(types.any, types.any) + types["nil"] / {}
+    environment: types.shape {
+        -- ThemeConfig::environment::basePath -> string
+        -- Represents the base pathname of the book
+        --
+        basePath: types.string + types["nil"] / "/"
 
-    -- ThemeConfig::omnibar -> table
-    -- Represents link to be present in a theme's omnibar
-    --
-    omnibar: types.array_of(
-        types.shape(link: types.string, text: types.string)
-    ) + types["nil"] / {}
+        -- ThemeConfig::environment::omnibar -> table
+        -- Represents link to be present in a theme's omnibar
+        --
+        omnibar: types.array_of(
+            types.shape(link: types.string, text: types.string)
+        ) + types["nil"] / {}
+
+        -- ThemeConfig::environment::title -> string
+        -- Represents the title of the book
+        --
+        title: types.string + types["nil"] / "LunarBook"
+
+        -- ThemeConfig::environment::scriptPath -> string
+        -- Represents the pathname of the book's component scripts
+        --
+        scriptPath: types.string + types["nil"] / "assets/scripts/lunarbook.components.js"
+
+        -- ThemeConfig::environment::stylePath -> string
+        -- Represents the pathname of the book's component styling
+        --
+        stylePath: types.string + types["nil"] / "assets/styles/lunarbook.components.css"
+    }, {extra_fields: types.map_of(types.any, types.any)}

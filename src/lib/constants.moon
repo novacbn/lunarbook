@@ -33,6 +33,11 @@ export BOOK_HOME = with {}
     --
     .theme = join(.data, "theme")
 
+    -- BOOK_HOME::plugins -> table
+    -- Represents the directory for the local LunarBook plugins
+    --
+    .plugins = join(.data, "plugins")
+
     -- BOOK_HOME::configuration -> string
     -- Represents the local configuration file of the book
     --
