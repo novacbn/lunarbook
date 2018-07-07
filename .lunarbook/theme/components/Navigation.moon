@@ -29,6 +29,10 @@ _ = [[link:
         content:            "''"]]
 
 Style (env) ->
+    root {
+        zIndex: 2
+    }
+
     div {
         backgroundColor: env.colors.white
 
@@ -60,7 +64,7 @@ Style (env) ->
     }
 
 Layout (env, state) ->
-    div class: "fill-1", ->
+    div class: "fill-1", id: "navigation", ->
         for fragment in *state.fragments
             h6 fragment.title
 
@@ -68,4 +72,7 @@ Layout (env, state) ->
                 ul ->
                     for section in *fragment.sections
                         li ->
-                            a href: env.basePath..section.link, section.title
+                            link = "#"..section.slug
+                            unless fragment.link == state.link then link = env.basePath..fragment.link..link
+
+                            a href: link, section.title

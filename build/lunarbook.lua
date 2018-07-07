@@ -2988,6 +2988,7 @@ do\
     local fragment = self:processFragment(file)\
     local layout = self.theme:render(\"Index\", true, self.layoutEnvironment, {\
       fragment = fragment.render,\
+      link = fragment.link,\
       navigation = fragments\
     })\
     local link = join(BUILD_DIRS.fragments, fragment.link)\
@@ -3093,7 +3094,7 @@ do\
           local section = _list_0[_index_0]\
           _accum_0[_len_0] = {\
             title = section,\
-            link = link .. \"#\" .. slugify(section)\
+            slug = slugify(section)\
           }\
           _len_0 = _len_0 + 1\
         end\

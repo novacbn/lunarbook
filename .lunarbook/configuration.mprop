@@ -1,6 +1,6 @@
 theme: {
     environment:
-        basePath: "/dist/"
+        basePath: "/lunarbook/"
 
         omnibar: {
             {text: "Guide", link: "/lunarbook/guide"}

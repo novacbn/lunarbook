@@ -114,7 +114,7 @@ export Book = with Object\extend()
         @initializeAssets()
 
     -- Book::initializeAssets() -> void
-    --
+    -- Collects the assets required by the style and pushes them to the environment
     --
     .initializeAssets = () =>
         for asset in *@theme\getIncludedAssets()
@@ -138,7 +138,7 @@ export Book = with Object\extend()
     --
     .createFragment = (file, fragments) =>
         fragment    = @processFragment(file)
-        layout      = @theme\render("Index", true, @layoutEnvironment, fragment: fragment.render, navigation: fragments)
+        layout      = @theme\render("Index", true, @layoutEnvironment, fragment: fragment.render, link: fragment.link, navigation: fragments)
 
         link = join(BUILD_DIRS.fragments, fragment.link)
         @vfs\mkdirSync(link) unless isdirSync(@vfs, link)
@@ -156,7 +156,6 @@ export Book = with Object\extend()
 
         -- Write any memory-cached assets to disk
         @vfs\writeFileSync(join(BUILD_DIRS.fragments, fragment.link..".html"), fragment.render) for fragment in *@cache
-
         --@vfs\writeFileSync(join(BUILD_DIRS.scripts, "lunarbook.components.js", @theme\getComputedScript())
         @vfs\writeFileSync(join(BUILD_DIRS.styles, "lunarbook.components.css"), @theme\getComputedStyle(true, @styleEnvironment))
 
@@ -197,7 +196,7 @@ export Book = with Object\extend()
                 link = join(link, slugify(title))
                 error("bad argument #1 to 'processFragment' (missing or malformed title)") unless #link > 0
 
-            sections        = [{title: section, link: link.."#"..slugify(section)} for section in *extractSections(layout)]
+            sections        = [{title: section, slug: slugify(section)} for section in *extractSections(layout)]
             @cache[file]    = ProcessedFragment(layout, link, title, sections)
 
         return @cache[file]

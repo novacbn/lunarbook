@@ -1,6 +1,5 @@
---Fragment    = include "Fragment"
-Navigation = include "Navigation"
---Omnibar     = include "Omnibar"
+Navigation  = include "Navigation"
+Omnibar     = include "Omnibar"
 
 Style (env) ->
     div.container {
@@ -24,8 +23,8 @@ Layout (env, state) ->
             script type: "application/javascript", src: env.basePath..env.scriptPath
 
         body class: "cover col", ->
-            --Omnibar env.omnibar if #env.omnibar > 0
+            Omnibar env.omnibar if #env.omnibar > 0
 
-            div class: "row container fill-5", ->
-                Navigation fragments: state.navigation if state.navigation
+            div class: "row container fill-5", id: "container", ->
+                Navigation fragments: state.navigation, link: state.link if state.navigation
                 raw state.fragment

@@ -6,11 +6,14 @@ Style (env) ->
         paddingLeft:    env.spacing.six
         paddingRight:   env.spacing.eight
 
-        animationDuration:  "0.15s !important"
+        animationName:      "fadeIn, slideInLeft"
+        animationDuration:  "0.5s, 0.2s"
+
         color:              env.colors.black
         fontSize:           "1.7rem"
 
-        overflowY: "auto"
+        zIndex:     1
+        overflowY:  "auto"
     }
 
     root * a {
@@ -42,4 +45,4 @@ Style (env) ->
     }
 
 Layout (env, state) ->
-    div class: "animated fadeInLeftBig fill-5", state.fragment
+    div class: "animated fill-5", id: "fragment", state.fragment
