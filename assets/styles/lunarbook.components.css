@@ -73,7 +73,8 @@ a[data-layout='cf03cf2e9cdf95a20af09137dfb9071db0c31bf2'] {
 }
 *[data-root][data-layout='56def3b765521cb554f1ff7585609e7cd5a08417'] a {
 	color: #DDDDDD;
-	font-size: 2rem;
+	font-size: 1.8rem;
+	font-weight: bold;
 	outline: none;
 	text-decoration: none;
 }
